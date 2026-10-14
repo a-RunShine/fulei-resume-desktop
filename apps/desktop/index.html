@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>Reactive Resume</title>
+		<style>
+			body {
+				font-family: sans-serif;
+				margin: 2rem;
+			}
+			label {
+				display: block;
+				margin-bottom: 1rem;
+			}
+			input,
+			textarea {
+				display: block;
+				width: 100%;
+				margin-top: 0.25rem;
+				font: inherit;
+			}
+			textarea {
+				min-height: 8rem;
+			}
+			button {
+				font: inherit;
+				padding: 0.5rem 1rem;
+			}
+			#status {
+				margin-top: 1rem;
+			}
+		</style>
+	</head>
+	<body>
+		<form id="resume">
+			<label>
+				Name
+				<input name="name" autocomplete="name" />
+			</label>
+			<label>
+				Summary
+				<textarea name="summary"></textarea>
+			</label>
+			<button type="submit">Export PDF</button>
+		</form>
+		<p id="status" role="status"></p>
+		<script type="module" src="/src/main.ts"></script>
+	</body>
+</html>

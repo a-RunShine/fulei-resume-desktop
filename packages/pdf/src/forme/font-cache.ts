@@ -17,10 +17,25 @@ const shippedFonts = new Map<string, string>([
 
 const faceKey = (request: PdfFontRequest) => `${request.family}:${request.weight}:${request.italic}`;
 
+const preparedFontUrl = (request: PdfFontRequest) =>
+	`http://fontcache.localhost/${encodeURIComponent(request.family)}/${request.weight}/${request.italic}`;
+
+const readPreparedFont = async (request: PdfFontRequest): Promise<Uint8Array | null> => {
+	try {
+		const response = await fetch(preparedFontUrl(request), { signal: AbortSignal.timeout(2_000) });
+		if (!response.ok) return null;
+		return new Uint8Array(await response.arrayBuffer());
+	} catch {
+		return null;
+	}
+};
+
 export const readShippedFont = async (request: PdfFontRequest): Promise<Uint8Array | null> => {
 	const url = shippedFonts.get(faceKey(request));
-	if (!url) return null;
-	const response = await fetch(url);
-	if (!response.ok) throw new Error(`Font ${request.family} could not be loaded.`);
-	return new Uint8Array(await response.arrayBuffer());
+	if (url) {
+		const response = await fetch(url);
+		if (!response.ok) throw new Error(`Font ${request.family} could not be loaded.`);
+		return new Uint8Array(await response.arrayBuffer());
+	}
+	return readPreparedFont(request);
 };
