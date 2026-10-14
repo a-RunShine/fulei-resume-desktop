@@ -62,6 +62,19 @@
 				white-space: pre;
 				transform-origin: 0 0;
 			}
+			#sections {
+				display: flex;
+				flex-direction: column;
+				gap: 0.25rem;
+				width: 9rem;
+				margin-bottom: 1rem;
+			}
+			#sections button {
+				text-align: left;
+			}
+			#sections button[aria-pressed="true"] {
+				font-weight: 700;
+			}
 		</style>
 	</head>
 	<body>
@@ -69,20 +82,73 @@
 		<ul id="resumes" aria-label="Resumes"></ul>
 		<section id="editor" hidden>
 			<div id="editor-fields">
+				<nav id="sections" aria-label="Sections">
+					<button type="button" data-section="picture" aria-pressed="false">Picture</button>
+					<button type="button" data-section="basics" aria-pressed="true">Basics</button>
+					<button type="button" data-section="summary" aria-pressed="false">Summary</button>
+					<button type="button" data-section="profiles" aria-pressed="false">Profiles</button>
+					<button type="button" data-section="experience" aria-pressed="false">Experience</button>
+					<button type="button" data-section="education" aria-pressed="false">Education</button>
+				</nav>
+				<section id="section-picture" aria-label="Picture" hidden>
+					<label>
+						Picture URL
+						<input id="picture-url" name="pictureUrl" />
+					</label>
+					<label>
+						Show picture
+						<input id="picture-visible" name="pictureVisible" type="checkbox" />
+					</label>
+				</section>
+				<section id="section-basics" aria-label="Basics">
+					<label>
+						Name
+						<input id="basics-name" name="name" autocomplete="name" />
+					</label>
+				</section>
+				<section id="section-summary" aria-label="Summary" hidden>
+					<label>
+						Summary
+						<textarea id="summary" name="summary"></textarea>
+					</label>
+				</section>
+				<section id="section-profiles" aria-label="Profiles" hidden>
+					<button type="button" id="add-profile">Add Item</button>
+					<div id="profile-item" hidden>
+						<label>
+							Network
+							<input id="network" name="network" />
+						</label>
+					</div>
+				</section>
+				<section id="section-experience" aria-label="Experience" hidden>
+					<button type="button" id="add-item">Add Item</button>
+					<div id="experience-item" hidden>
+						<label>
+							Company
+							<input id="company" name="company" />
+						</label>
+						<label>
+							Position
+							<input id="position" name="position" />
+						</label>
+						<button type="button" id="remove-item">Remove Item</button>
+					</div>
+				</section>
+				<section id="section-education" aria-label="Education" hidden>
+					<button type="button" id="add-education">Add Item</button>
+					<div id="education-item" hidden>
+						<label>
+							School
+							<input id="school" name="school" />
+						</label>
+					</div>
+				</section>
 				<label>
 					Title
 					<input id="title" name="title" />
 				</label>
 				<button type="button" id="delete-resume">Delete</button>
-				<h2>Basics</h2>
-				<label>
-					Name
-					<input id="basics-name" name="name" autocomplete="name" />
-				</label>
-				<label>
-					Summary
-					<textarea id="summary" name="summary"></textarea>
-				</label>
 				<label>
 					Template
 					<select id="template"></select>
@@ -94,23 +160,10 @@
 						<option value="letter">Letter</option>
 					</select>
 				</label>
-				<h2>Skills</h2>
 				<label>
 					Skill
 					<input id="skill" name="skill" />
 				</label>
-				<h2>Experience</h2>
-				<button type="button" id="add-item">Add Item</button>
-				<div id="experience-item" hidden>
-					<label>
-						Company
-						<input id="company" name="company" />
-					</label>
-					<label>
-						Position
-						<input id="position" name="position" />
-					</label>
-				</div>
 				<button type="button" id="export-pdf">Export PDF</button>
 				<p id="persist" role="status"></p>
 			</div>

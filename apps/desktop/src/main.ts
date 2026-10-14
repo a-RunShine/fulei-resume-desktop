@@ -1,4 +1,10 @@
-import type { ExperienceItem, ResumeData, SkillItem } from "@reactive-resume/schema/resume/data";
+import type {
+	EducationItem,
+	ExperienceItem,
+	ProfileItem,
+	ResumeData,
+	SkillItem,
+} from "@reactive-resume/schema/resume/data";
 import type { Template } from "@reactive-resume/schema/templates";
 import type { PDFDocumentLoadingTask } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { invoke } from "@tauri-apps/api/core";
@@ -17,8 +23,17 @@ const editor = document.querySelector<HTMLElement>("#editor");
 const titleInput = document.querySelector<HTMLInputElement>("#title");
 const deleteResumeButton = document.querySelector<HTMLButtonElement>("#delete-resume");
 const nameInput = document.querySelector<HTMLInputElement>("#basics-name");
+const pictureUrlInput = document.querySelector<HTMLInputElement>("#picture-url");
+const pictureVisibleInput = document.querySelector<HTMLInputElement>("#picture-visible");
 const summaryInput = document.querySelector<HTMLTextAreaElement>("#summary");
 const addItemButton = document.querySelector<HTMLButtonElement>("#add-item");
+const removeItemButton = document.querySelector<HTMLButtonElement>("#remove-item");
+const addProfileButton = document.querySelector<HTMLButtonElement>("#add-profile");
+const profileItem = document.querySelector<HTMLElement>("#profile-item");
+const networkInput = document.querySelector<HTMLInputElement>("#network");
+const addEducationButton = document.querySelector<HTMLButtonElement>("#add-education");
+const educationItem = document.querySelector<HTMLElement>("#education-item");
+const schoolInput = document.querySelector<HTMLInputElement>("#school");
 const templateSelect = document.querySelector<HTMLSelectElement>("#template");
 const paperSelect = document.querySelector<HTMLSelectElement>("#paper");
 const experienceItem = document.querySelector<HTMLElement>("#experience-item");
@@ -34,6 +49,33 @@ const providerForm = document.querySelector<HTMLFormElement>("#provider");
 const providerStatus = document.querySelector<HTMLElement>("#provider-status");
 const reply = document.querySelector<HTMLElement>("#reply");
 const askButton = document.querySelector<HTMLButtonElement>("#ask");
+const sections = document.querySelector<HTMLElement>("#sections");
+
+const railSections = ["picture", "basics", "summary", "profiles", "experience", "education"] as const;
+
+const showSection = (name: (typeof railSections)[number]) => {
+	for (const section of railSections) {
+		const region = document.querySelector(`#section-${section}`);
+		const button = sections?.querySelector<HTMLButtonElement>(`[data-section="${section}"]`);
+		if (section === name) {
+			region?.removeAttribute("hidden");
+			button?.setAttribute("aria-pressed", "true");
+		} else {
+			region?.setAttribute("hidden", "");
+			button?.setAttribute("aria-pressed", "false");
+		}
+	}
+};
+
+const isRailSection = (name: string | undefined): name is (typeof railSections)[number] =>
+	railSections.some((section) => section === name);
+
+sections?.addEventListener("click", (event) => {
+	const target = event.target;
+	const button = target instanceof HTMLElement ? target.closest("button") : null;
+	const name = button instanceof HTMLButtonElement ? button.dataset.section : undefined;
+	if (isRailSection(name)) showSection(name);
+});
 
 type ResumeListItem = {
 	id: string;
@@ -80,6 +122,29 @@ const skillNamed = (name: string): SkillItem => ({
 	proficiency: "",
 	level: 0,
 	keywords: [],
+});
+
+const emptyProfile = (): ProfileItem => ({
+	id: crypto.randomUUID(),
+	hidden: false,
+	icon: "",
+	iconColor: "",
+	network: "",
+	username: "",
+	website: { url: "", label: "", inlineLink: false },
+});
+
+const emptyEducation = (): EducationItem => ({
+	id: crypto.randomUUID(),
+	hidden: false,
+	school: "",
+	degree: "",
+	area: "",
+	grade: "",
+	location: "",
+	period: "",
+	website: { url: "", label: "", inlineLink: false },
+	description: "",
 });
 
 const emptyExperience = (): ExperienceItem => ({
@@ -176,12 +241,30 @@ const showDocument = (title: string) => {
 	if (!resumeDocument) return;
 	if (titleInput) titleInput.value = title;
 	if (nameInput) nameInput.value = resumeDocument.basics.name;
+	if (pictureUrlInput) pictureUrlInput.value = resumeDocument.picture.url;
+	if (pictureVisibleInput) pictureVisibleInput.checked = !resumeDocument.picture.hidden;
 	if (summaryInput) summaryInput.value = summaryText(resumeDocument.summary.content);
 	if (templateSelect) templateSelect.value = resumeDocument.metadata.template;
 	if (paperSelect) {
 		paperSelect.value = resumeDocument.metadata.page.format === "letter" ? "letter" : "a4";
 	}
 	if (skillInput) skillInput.value = resumeDocument.sections.skills.items[0]?.name ?? "";
+	const profile = resumeDocument.sections.profiles.items[0];
+	if (profile) {
+		profileItem?.removeAttribute("hidden");
+		if (networkInput) networkInput.value = profile.network;
+	} else {
+		profileItem?.setAttribute("hidden", "");
+		if (networkInput) networkInput.value = "";
+	}
+	const education = resumeDocument.sections.education.items[0];
+	if (education) {
+		educationItem?.removeAttribute("hidden");
+		if (schoolInput) schoolInput.value = education.school;
+	} else {
+		educationItem?.setAttribute("hidden", "");
+		if (schoolInput) schoolInput.value = "";
+	}
 	const item = resumeDocument.sections.experience.items[0];
 	if (item) {
 		experienceItem?.removeAttribute("hidden");
@@ -300,6 +383,16 @@ nameInput?.addEventListener("input", () => {
 	saveDocument();
 });
 
+const applyPicture = () => {
+	if (!resumeDocument || !pictureUrlInput || !pictureVisibleInput) return;
+	resumeDocument.picture.url = pictureUrlInput.value;
+	resumeDocument.picture.hidden = !pictureVisibleInput.checked;
+	saveDocument();
+};
+
+pictureUrlInput?.addEventListener("input", applyPicture);
+pictureVisibleInput?.addEventListener("change", applyPicture);
+
 const isTemplate = (value: string): value is Template => templateSchema.options.some((template) => template === value);
 
 templateSelect?.addEventListener("change", () => {
@@ -336,12 +429,59 @@ skillInput?.addEventListener("input", () => {
 	saveDocument();
 });
 
+addProfileButton?.addEventListener("click", () => {
+	if (!resumeDocument) return;
+	if (resumeDocument.sections.profiles.items.length === 0) {
+		resumeDocument.sections.profiles.items.push(emptyProfile());
+	}
+	profileItem?.removeAttribute("hidden");
+	saveDocument();
+});
+
+networkInput?.addEventListener("input", () => {
+	const item = resumeDocument?.sections.profiles.items[0];
+	if (!item || !networkInput) return;
+	item.network = networkInput.value;
+	saveDocument();
+});
+
+addEducationButton?.addEventListener("click", () => {
+	if (!resumeDocument) return;
+	if (resumeDocument.sections.education.items.length === 0) {
+		resumeDocument.sections.education.items.push(emptyEducation());
+	}
+	educationItem?.removeAttribute("hidden");
+	saveDocument();
+});
+
+schoolInput?.addEventListener("input", () => {
+	const item = resumeDocument?.sections.education.items[0];
+	if (!item || !schoolInput) return;
+	item.school = schoolInput.value;
+	saveDocument();
+});
+
 addItemButton?.addEventListener("click", () => {
 	if (!resumeDocument) return;
 	if (resumeDocument.sections.experience.items.length === 0) {
 		resumeDocument.sections.experience.items.push(emptyExperience());
 	}
 	experienceItem?.removeAttribute("hidden");
+	saveDocument();
+});
+
+removeItemButton?.addEventListener("click", () => {
+	if (!resumeDocument) return;
+	resumeDocument.sections.experience.items.shift();
+	const item = resumeDocument.sections.experience.items[0];
+	if (item) {
+		if (companyInput) companyInput.value = item.company;
+		if (positionInput) positionInput.value = item.position;
+	} else {
+		experienceItem?.setAttribute("hidden", "");
+		if (companyInput) companyInput.value = "";
+		if (positionInput) positionInput.value = "";
+	}
 	saveDocument();
 });
 

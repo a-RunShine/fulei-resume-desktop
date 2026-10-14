@@ -280,7 +280,8 @@ it("shows the configured provider reply and keeps the api key out of the stored 
 		try {
 			await first.page.getByRole("button", { name: "New Resume" }).click();
 			await first.page.getByLabel("Name").fill(name);
-			await first.page.getByLabel("Summary").fill(summary);
+			await first.page.getByRole("button", { name: "Summary", exact: true }).click();
+			await first.page.getByRole("textbox", { name: "Summary" }).fill(summary);
 			await first.page.getByLabel("Provider").fill(provider.baseUrl);
 			await first.page.getByLabel("Model").fill(model);
 			await first.page.getByLabel("API key").fill(apiKey);

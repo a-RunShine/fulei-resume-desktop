@@ -201,7 +201,8 @@ it("exports a Chinese resume from the desktop window while external hosts are bl
 
 		await page.getByRole("button", { name: "New Resume" }).click();
 		await page.getByLabel("Name", { exact: true }).fill(name);
-		await page.getByLabel("Summary").fill(summary);
+		await openSection(page, "Summary");
+		await page.getByRole("textbox", { name: "Summary" }).fill(summary);
 		await page.getByRole("button", { name: "Export PDF" }).click();
 		await page.getByText(/^Exported /).waitFor({ timeout: 120_000 });
 		const status = await page.getByText(/^Exported /).innerText();
@@ -372,7 +373,9 @@ it("edits Basics, Summary, and a Section Item", async () => {
 		await page.getByLabel("Title").fill("中文简历");
 		await page.getByRole("button", { name: "中文简历" }).waitFor();
 		await page.getByLabel("Name", { exact: true }).fill(basicsName);
-		await page.getByLabel("Summary").fill(summary);
+		await openSection(page, "Summary");
+		await page.getByRole("textbox", { name: "Summary" }).fill(summary);
+		await openSection(page, "Experience");
 		await page.getByRole("button", { name: "Add Item" }).click();
 		await page.getByLabel("Company").fill(company);
 		await page.getByLabel("Position").fill(position);
@@ -381,7 +384,7 @@ it("edits Basics, Summary, and a Section Item", async () => {
 		await expectPage(page.getByLabel("Name", { exact: true })).toHaveValue("");
 		await page.getByRole("button", { name: "中文简历" }).click();
 		await expectPage(page.getByLabel("Name", { exact: true })).toHaveValue(basicsName);
-		await expectPage(page.getByLabel("Summary")).toHaveValue(summary);
+		await expectPage(page.getByRole("textbox", { name: "Summary", includeHidden: true })).toHaveValue(summary);
 		await expectPage(page.getByLabel("Company")).toHaveValue(company);
 		await expectPage(page.getByLabel("Position")).toHaveValue(position);
 	} finally {
@@ -429,7 +432,9 @@ it("opens the same Resume, including Chinese, after a restart", async () => {
 		await first.page.getByLabel("Title").fill(title);
 		await first.page.getByRole("button", { name: title }).waitFor();
 		await first.page.getByLabel("Name", { exact: true }).fill(basicsName);
-		await first.page.getByLabel("Summary").fill(summary);
+		await openSection(first.page, "Summary");
+		await first.page.getByRole("textbox", { name: "Summary" }).fill(summary);
+		await openSection(first.page, "Experience");
 		await first.page.getByRole("button", { name: "Add Item" }).click();
 		await first.page.getByLabel("Company").fill(company);
 		await first.page.getByLabel("Position").fill(position);
@@ -445,7 +450,7 @@ it("opens the same Resume, including Chinese, after a restart", async () => {
 		await second.page.getByRole("button", { name: title }).click();
 		await expectPage(second.page.getByLabel("Title")).toHaveValue(title);
 		await expectPage(second.page.getByLabel("Name", { exact: true })).toHaveValue(basicsName);
-		await expectPage(second.page.getByLabel("Summary")).toHaveValue(summary);
+		await expectPage(second.page.getByRole("textbox", { name: "Summary", includeHidden: true })).toHaveValue(summary);
 		await expectPage(second.page.getByLabel("Company")).toHaveValue(company);
 		await expectPage(second.page.getByLabel("Position")).toHaveValue(position);
 		await expectPage(second.page.getByLabel("Template")).toHaveValue("bronzor");
@@ -476,7 +481,9 @@ it("exports a PDF in the selected Template and paper size", async () => {
 	try {
 		await page.getByRole("button", { name: "New Resume" }).click();
 		await page.getByLabel("Name", { exact: true }).fill(basicsName);
-		await page.getByLabel("Summary").fill(summary);
+		await openSection(page, "Summary");
+		await page.getByRole("textbox", { name: "Summary" }).fill(summary);
+		await openSection(page, "Experience");
 		await page.getByRole("button", { name: "Add Item" }).click();
 		await page.getByLabel("Company").fill(company);
 		await page.getByLabel("Skill").fill(skill);
@@ -562,7 +569,8 @@ it("runs the offline desktop session", async () => {
 	try {
 		await missing.page.getByRole("button", { name: "New Resume" }).click();
 		await missing.page.getByLabel("Name", { exact: true }).fill(sessionName);
-		await missing.page.getByLabel("Summary").fill(sessionSummary);
+		await openSection(missing.page, "Summary");
+		await missing.page.getByRole("textbox", { name: "Summary" }).fill(sessionSummary);
 		await missing.page.getByRole("button", { name: "Export PDF" }).click();
 		await missing.page.getByText(/Fonts could not be loaded/).waitFor();
 		await expectPage(missing.page.locator("#status")).toContainText("Noto Serif SC");
@@ -587,7 +595,8 @@ it("runs the offline desktop session", async () => {
 		await first.page.getByLabel("Title").fill(sessionTitle);
 		await first.page.getByRole("button", { name: sessionTitle }).waitFor();
 		await first.page.getByLabel("Name", { exact: true }).fill(sessionName);
-		await first.page.getByLabel("Summary").fill(sessionSummary);
+		await openSection(first.page, "Summary");
+		await first.page.getByRole("textbox", { name: "Summary" }).fill(sessionSummary);
 		await first.page.getByLabel("Template").selectOption("Bronzor");
 		first.page.setDefaultTimeout(180_000);
 		await first.page.getByRole("button", { name: "Export PDF" }).click();
@@ -614,7 +623,9 @@ it("runs the offline desktop session", async () => {
 	try {
 		await second.page.getByRole("button", { name: sessionTitle }).click();
 		await expectPage(second.page.getByLabel("Name", { exact: true })).toHaveValue(sessionName);
-		await expectPage(second.page.getByLabel("Summary")).toHaveValue(sessionSummary);
+		await expectPage(second.page.getByRole("textbox", { name: "Summary", includeHidden: true })).toHaveValue(
+			sessionSummary,
+		);
 		await expectPage(second.page.getByLabel("Template")).toHaveValue("bronzor");
 		second.page.setDefaultTimeout(180_000);
 		await second.page.getByRole("button", { name: "Export PDF" }).click();
@@ -668,13 +679,246 @@ it("shows the Page before any export and updates it when the name and Summary ch
 		await page.getByLabel("Name", { exact: true }).fill(basicsName);
 		await expectPage.poll(async () => visiblePageText(resumePage), { timeout: 180_000 }).toContain(basicsName);
 
-		await page.getByLabel("Summary").fill(summary);
+		await openSection(page, "Summary");
+		await page.getByRole("textbox", { name: "Summary" }).fill(summary);
 		await expectPage.poll(async () => visiblePageText(resumePage), { timeout: 180_000 }).toContain(summary);
 		expect(await visiblePageText(resumePage)).toContain(basicsName);
 		expect(blocked.some((url) => /fonts\.gstatic\.(com|cn)/.test(url))).toBe(false);
 	} catch (error) {
 		const detail = pageErrors.join("\n").slice(-4000);
 		throw new Error(`${error instanceof Error ? error.message : String(error)}\n${detail}`);
+	} finally {
+		await session.close();
+	}
+});
+
+const leftRailSections = ["Picture", "Basics", "Summary", "Profiles", "Experience", "Education"] as const;
+
+const openSection = async (page: Page, name: (typeof leftRailSections)[number]) => {
+	await page.getByRole("button", { name, exact: true }).click();
+};
+
+it("switches the left rail among Picture, Basics, Summary, Profiles, Experience, and Education", async () => {
+	const directory = join(tmpdir(), `reactive-resume-rail-${process.pid}`);
+	const session = await launchDesktop({
+		port: 9246,
+		directory,
+		databasePath: join(directory, "resumes.sqlite"),
+	});
+	const page = session.page;
+	await blockExternal(page);
+	try {
+		await page.getByRole("button", { name: "New Resume" }).click();
+		for (const section of leftRailSections) {
+			await page.getByRole("button", { name: section, exact: true }).click();
+			const current = page.getByRole("region", { name: section });
+			await expectPage(current).toBeVisible();
+			if (section === "Picture") await expectPage(current.getByLabel("Picture URL")).toBeVisible();
+			if (section === "Basics") await expectPage(current.getByLabel("Name", { exact: true })).toBeVisible();
+			if (section === "Summary") await expectPage(current.getByRole("textbox", { name: "Summary" })).toBeVisible();
+			if (section === "Profiles" || section === "Experience" || section === "Education") {
+				await expectPage(current.getByRole("button", { name: "Add Item" })).toBeVisible();
+			}
+			for (const other of leftRailSections) {
+				if (other === section) continue;
+				const hiddenSection = page.getByRole("region", { name: other, includeHidden: true });
+				await expectPage(hiddenSection).toBeAttached();
+				await expectPage(hiddenSection).toBeHidden();
+			}
+		}
+	} finally {
+		await session.close();
+	}
+});
+
+it("adds and removes an Experience Item on the Page", async () => {
+	const directory = join(tmpdir(), `reactive-resume-experience-${process.pid}`);
+	const session = await launchDesktop({
+		port: 9247,
+		directory,
+		databasePath: join(directory, "resumes.sqlite"),
+		fonts: true,
+	});
+	const page = session.page;
+	const blocked = await blockExternal(page);
+	const company = "北风实验室";
+	page.setDefaultTimeout(180_000);
+	try {
+		await page.getByRole("button", { name: "New Resume" }).click();
+		const resumePage = page.getByRole("region", { name: "Page" });
+		await expectPage(resumePage).toBeVisible();
+		await page.getByRole("button", { name: "Experience", exact: true }).click();
+		await page.getByRole("button", { name: "Add Item" }).click();
+		await page.getByLabel("Company").fill(company);
+		await expectPage.poll(async () => visiblePageText(resumePage)).toContain(company);
+		await page.getByRole("button", { name: "Remove Item" }).click();
+		await expectPage.poll(async () => visiblePageText(resumePage)).not.toContain(company);
+		expect(blocked.some((url) => /fonts\.gstatic\.(com|cn)/.test(url))).toBe(false);
+	} finally {
+		await session.close();
+	}
+});
+
+const bluePng = Buffer.from(
+	"iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEElEQVR4nGNgYPiPAw0pCQCpcD/BFMrqcwAAAABJRU5ErkJggg==",
+	"base64",
+);
+
+const startPictureHost = async () => {
+	const server = createServer((_request: IncomingMessage, response: ServerResponse) => {
+		response.writeHead(200, {
+			"Content-Type": "image/png",
+			"Access-Control-Allow-Origin": "*",
+			"Cache-Control": "no-store",
+		});
+		response.end(bluePng);
+	});
+	await new Promise<void>((resolve) => {
+		server.listen(0, "127.0.0.1", resolve);
+	});
+	const address = server.address();
+	if (address === null || typeof address === "string") throw new Error("picture host has no port");
+	return {
+		url: `http://127.0.0.1:${address.port}/blue.png`,
+		close: () =>
+			new Promise<void>((resolve, reject) => {
+				server.close((error) => (error ? reject(error) : resolve()));
+			}),
+	};
+};
+
+const pageHasBlue = async (region: Locator) =>
+	region.locator("canvas").evaluate((canvas: HTMLCanvasElement) => {
+		const context = canvas.getContext("2d");
+		if (!context) return false;
+		const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+		for (let index = 0; index < pixels.length; index += 4) {
+			const red = pixels[index] ?? 0;
+			const green = pixels[index + 1] ?? 0;
+			const blue = pixels[index + 2] ?? 0;
+			if (blue > 200 && red < 40 && green < 40) return true;
+		}
+		return false;
+	});
+
+it("shows and hides the Picture on the Page", async () => {
+	const directory = join(tmpdir(), `reactive-resume-picture-${process.pid}`);
+	const picture = await startPictureHost();
+	const session = await launchDesktop({
+		port: 9248,
+		directory,
+		databasePath: join(directory, "resumes.sqlite"),
+		fonts: true,
+	});
+	const page = session.page;
+	const blocked = await blockExternal(page);
+	page.setDefaultTimeout(180_000);
+	try {
+		await page.getByRole("button", { name: "New Resume" }).click();
+		const resumePage = page.getByRole("region", { name: "Page" });
+		await expectPage(resumePage).toBeVisible();
+		await page.getByRole("button", { name: "Picture", exact: true }).click();
+		await page.getByLabel("Picture URL").fill(picture.url);
+		await expectPage.poll(async () => pageHasBlue(resumePage)).toBe(false);
+		await page.getByLabel("Show picture").check();
+		await expectPage.poll(async () => pageHasBlue(resumePage)).toBe(true);
+		await page.getByLabel("Show picture").uncheck();
+		await expectPage.poll(async () => pageHasBlue(resumePage)).toBe(false);
+		expect(blocked.some((url) => /fonts\.gstatic\.(com|cn)/.test(url))).toBe(false);
+	} finally {
+		await session.close();
+		await picture.close();
+	}
+});
+
+it("keeps Experience and Picture after a restart", async () => {
+	const directory = join(tmpdir(), `reactive-resume-rail-restart-${process.pid}`);
+	const databasePath = join(directory, "resumes.sqlite");
+	const picture = await startPictureHost();
+	const company = "北风实验室";
+	const title = "左栏简历";
+	try {
+		const first = await launchDesktop({
+			port: 9249,
+			directory,
+			databasePath,
+			fonts: true,
+		});
+		const blocked = await blockExternal(first.page);
+		first.page.setDefaultTimeout(180_000);
+		try {
+			await first.page.getByRole("button", { name: "New Resume" }).click();
+			await first.page.getByLabel("Title").fill(title);
+			await first.page.getByRole("button", { name: title }).waitFor();
+			await first.page.getByRole("button", { name: "Experience", exact: true }).click();
+			await first.page.getByRole("button", { name: "Add Item" }).click();
+			await first.page.getByLabel("Company").fill(company);
+			await first.page.getByRole("button", { name: "Picture", exact: true }).click();
+			await first.page.getByLabel("Picture URL").fill(picture.url);
+			await first.page.getByLabel("Show picture").check();
+			const resumePage = first.page.getByRole("region", { name: "Page" });
+			await expectPage.poll(async () => visiblePageText(resumePage)).toContain(company);
+			await expectPage.poll(async () => pageHasBlue(resumePage)).toBe(true);
+			await expectPage(first.page.getByText("Saved", { exact: true })).toBeVisible();
+			expect(blocked.some((url) => /fonts\.gstatic\.(com|cn)/.test(url))).toBe(false);
+		} finally {
+			await first.close();
+		}
+
+		const second = await launchDesktop({
+			port: 9250,
+			directory,
+			databasePath,
+			fonts: true,
+			fresh: false,
+		});
+		await blockExternal(second.page);
+		second.page.setDefaultTimeout(180_000);
+		try {
+			await second.page.getByRole("button", { name: title }).click();
+			const resumePage = second.page.getByRole("region", { name: "Page" });
+			await expectPage(resumePage).toBeVisible();
+			await expectPage.poll(async () => visiblePageText(resumePage)).toContain(company);
+			await expectPage.poll(async () => pageHasBlue(resumePage)).toBe(true);
+			await second.page.getByRole("button", { name: "Experience", exact: true }).click();
+			await expectPage(second.page.getByLabel("Company")).toHaveValue(company);
+			await second.page.getByRole("button", { name: "Picture", exact: true }).click();
+			await expectPage(second.page.getByLabel("Picture URL")).toHaveValue(picture.url);
+			await expectPage(second.page.getByLabel("Show picture")).toBeChecked();
+		} finally {
+			await second.close();
+		}
+	} finally {
+		await picture.close();
+	}
+});
+
+it("edits a Profile and an Education Item on the Page", async () => {
+	const directory = join(tmpdir(), `reactive-resume-profile-education-${process.pid}`);
+	const session = await launchDesktop({
+		port: 9251,
+		directory,
+		databasePath: join(directory, "resumes.sqlite"),
+		fonts: true,
+	});
+	const page = session.page;
+	const blocked = await blockExternal(page);
+	const network = "GitHub";
+	const school = "北风大学";
+	try {
+		await page.getByRole("button", { name: "New Resume" }).click();
+		const resumePage = page.getByRole("region", { name: "Page" });
+		await expectPage(resumePage).toBeVisible();
+		await openSection(page, "Profiles");
+		await page.getByRole("button", { name: "Add Item" }).click();
+		await page.getByLabel("Network").fill(network);
+		await expectPage.poll(async () => visiblePageText(resumePage), { timeout: 180_000 }).toContain(network);
+		await openSection(page, "Education");
+		await page.getByRole("button", { name: "Add Item" }).click();
+		await page.getByLabel("School").fill(school);
+		await expectPage.poll(async () => visiblePageText(resumePage), { timeout: 180_000 }).toContain(school);
+		expect(await visiblePageText(resumePage)).toContain(network);
+		expect(blocked.some((url) => /fonts\.gstatic\.(com|cn)/.test(url))).toBe(false);
 	} finally {
 		await session.close();
 	}
