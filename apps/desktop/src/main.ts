@@ -1,9 +1,13 @@
 import type { ExperienceItem, ResumeData, SkillItem } from "@reactive-resume/schema/resume/data";
 import type { Template } from "@reactive-resume/schema/templates";
+import type { PDFDocumentLoadingTask } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { invoke } from "@tauri-apps/api/core";
+import { AnnotationMode, getDocument, GlobalWorkerOptions, TextLayer } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { createResumePdfBlob } from "@reactive-resume/pdf/browser";
 import { defaultResumeData } from "@reactive-resume/schema/resume/default";
 import { templateSchema } from "@reactive-resume/schema/templates";
+
+GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/legacy/build/pdf.worker.min.mjs", import.meta.url).toString();
 
 const status = document.querySelector<HTMLElement>("#status");
 const persist = document.querySelector<HTMLElement>("#persist");
@@ -22,6 +26,10 @@ const skillInput = document.querySelector<HTMLInputElement>("#skill");
 const companyInput = document.querySelector<HTMLInputElement>("#company");
 const positionInput = document.querySelector<HTMLInputElement>("#position");
 const exportButton = document.querySelector<HTMLButtonElement>("#export-pdf");
+const resumePage = document.querySelector<HTMLElement>("#resume-page");
+const resumeSheet = document.querySelector<HTMLElement>("#resume-sheet");
+const resumeCanvas = document.querySelector<HTMLCanvasElement>("#resume-canvas");
+const resumeText = document.querySelector<HTMLDivElement>("#resume-text");
 const providerForm = document.querySelector<HTMLFormElement>("#provider");
 const providerStatus = document.querySelector<HTMLElement>("#provider-status");
 const reply = document.querySelector<HTMLElement>("#reply");
@@ -86,6 +94,84 @@ const emptyExperience = (): ExperienceItem => ({
 	description: "",
 });
 
+const previewScale = 0.55;
+let previewGeneration = 0;
+let previewTimer = 0;
+let previewTask: PDFDocumentLoadingTask | undefined;
+let previewLayer: TextLayer | undefined;
+let pdfQueue: Promise<void> = Promise.resolve();
+
+const renderResumePdf = (data: ResumeData) => {
+	const snapshot = structuredClone(data);
+	const run = pdfQueue.then(() => createResumePdfBlob({ data: snapshot }));
+	pdfQueue = run.then(
+		() => undefined,
+		() => undefined,
+	);
+	return run;
+};
+
+const cancelPreviewLayer = () => {
+	previewLayer?.cancel();
+	previewLayer = undefined;
+};
+
+const paintPreview = async (data: ResumeData, generation: number) => {
+	if (!resumePage || !resumeSheet || !resumeCanvas || !resumeText) return;
+	const blob = await renderResumePdf(data);
+	if (generation !== previewGeneration) return;
+	const task = getDocument({ data: new Uint8Array(await blob.arrayBuffer()), verbosity: 0 });
+	previewTask = task;
+	try {
+		const pdf = await task.promise;
+		if (generation !== previewGeneration) return;
+		const pdfPage = await pdf.getPage(1);
+		const viewport = pdfPage.getViewport({ scale: previewScale });
+		resumeSheet.style.width = `${viewport.width}px`;
+		resumeSheet.style.height = `${viewport.height}px`;
+		resumeCanvas.width = Math.ceil(viewport.width);
+		resumeCanvas.height = Math.ceil(viewport.height);
+		await pdfPage.render({ canvas: resumeCanvas, viewport, annotationMode: AnnotationMode.DISABLE }).promise;
+		if (generation !== previewGeneration) return;
+		resumePage.removeAttribute("hidden");
+		const textContent = await pdfPage.getTextContent();
+		if (generation !== previewGeneration) return;
+		cancelPreviewLayer();
+		resumeText.replaceChildren();
+		const layer = new TextLayer({ textContentSource: textContent, container: resumeText, viewport });
+		previewLayer = layer;
+		await layer.render();
+	} finally {
+		if (previewTask === task) previewTask = undefined;
+		await task.destroy().catch(() => undefined);
+	}
+};
+
+const schedulePreview = () => {
+	if (!resumeDocument) return;
+	cancelPreviewLayer();
+	const generation = ++previewGeneration;
+	const snapshot = structuredClone(resumeDocument);
+	window.clearTimeout(previewTimer);
+	previewTimer = window.setTimeout(() => {
+		void paintPreview(snapshot, generation).catch((error: unknown) => {
+			if (generation !== previewGeneration) return;
+			console.error(error instanceof Error ? error.message : String(error));
+		});
+	}, 200);
+};
+
+const hidePage = () => {
+	previewGeneration += 1;
+	window.clearTimeout(previewTimer);
+	cancelPreviewLayer();
+	const task = previewTask;
+	previewTask = undefined;
+	if (task) void task.destroy().catch(() => undefined);
+	resumeText?.replaceChildren();
+	resumePage?.setAttribute("hidden", "");
+};
+
 const showDocument = (title: string) => {
 	if (!resumeDocument) return;
 	if (titleInput) titleInput.value = title;
@@ -107,6 +193,8 @@ const showDocument = (title: string) => {
 		if (positionInput) positionInput.value = "";
 	}
 	editor?.removeAttribute("hidden");
+	resumePage?.setAttribute("hidden", "");
+	schedulePreview();
 };
 
 const saveDocument = () => {
@@ -122,6 +210,7 @@ const saveDocument = () => {
 			if (generation === saveGeneration && persist) persist.textContent = "Saved";
 		})
 		.catch(showError);
+	schedulePreview();
 };
 
 const renderResumes = (resumes: ResumeListItem[]) => {
@@ -163,7 +252,7 @@ const bytesToBase64 = (bytes: Uint8Array) => {
 const exportResume = async () => {
 	if (!status || !resumeDocument) return;
 	status.textContent = "";
-	const blob = await createResumePdfBlob({ data: resumeDocument });
+	const blob = await renderResumePdf(resumeDocument);
 	const pdfBase64 = bytesToBase64(new Uint8Array(await blob.arrayBuffer()));
 	const path = await invoke<string>("save_resume_pdf", { pdfBase64 });
 	status.textContent = `Exported ${path}`;
@@ -190,6 +279,7 @@ deleteResumeButton?.addEventListener("click", () => {
 			openResumeId = undefined;
 			resumeDocument = undefined;
 			editor?.setAttribute("hidden", "");
+			hidePage();
 			await refreshResumes();
 		})
 		.catch(showError);

@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, expect, it } from "vitest";
-import { chromium, expect as expectPage, type Page } from "@playwright/test";
+import { chromium, expect as expectPage, type Locator, type Page } from "@playwright/test";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 
 const desktopRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -95,6 +95,8 @@ const writeDevServerConfig = (directory: string) => {
 afterAll(() => {
 	stopWindow();
 });
+
+const visiblePageText = async (region: Locator) => region.evaluate((node) => node.textContent ?? "");
 
 const pdfText = async (bytes: Uint8Array) => {
 	const document = await getDocument({ data: bytes, verbosity: 0 }).promise;
@@ -635,5 +637,45 @@ it("runs the offline desktop session", async () => {
 	} finally {
 		await second.close();
 		await provider.close();
+	}
+});
+
+it("shows the Page before any export and updates it when the name and Summary change", async () => {
+	const directory = join(tmpdir(), `reactive-resume-preview-${process.pid}`);
+	const session = await launchDesktop({
+		port: 9245,
+		directory,
+		databasePath: join(directory, "resumes.sqlite"),
+		fonts: true,
+	});
+	const page = session.page;
+	const blocked = await blockExternal(page);
+	const basicsName = "张三";
+	const summary = "我是一名前端工程师，熟悉 React 与 TypeScript。";
+	const pageErrors: string[] = [];
+	page.on("pageerror", (error) => pageErrors.push(error.message));
+	page.on("console", (message) => {
+		if (message.type() === "error") pageErrors.push(message.text());
+	});
+	page.setDefaultTimeout(180_000);
+	try {
+		await page.getByRole("button", { name: "New Resume" }).click();
+		const resumePage = page.getByRole("region", { name: "Page" });
+		await expectPage(resumePage).toBeVisible({ timeout: 180_000 });
+		expect(readdirSync(join(directory, "export")).filter((entry) => entry.endsWith(".pdf"))).toEqual([]);
+		await expectPage(page.getByText(/^Exported /)).toHaveCount(0);
+
+		await page.getByLabel("Name", { exact: true }).fill(basicsName);
+		await expectPage.poll(async () => visiblePageText(resumePage), { timeout: 180_000 }).toContain(basicsName);
+
+		await page.getByLabel("Summary").fill(summary);
+		await expectPage.poll(async () => visiblePageText(resumePage), { timeout: 180_000 }).toContain(summary);
+		expect(await visiblePageText(resumePage)).toContain(basicsName);
+		expect(blocked.some((url) => /fonts\.gstatic\.(com|cn)/.test(url))).toBe(false);
+	} catch (error) {
+		const detail = pageErrors.join("\n").slice(-4000);
+		throw new Error(`${error instanceof Error ? error.message : String(error)}\n${detail}`);
+	} finally {
+		await session.close();
 	}
 });

@@ -31,56 +31,95 @@
 			#reply {
 				margin-top: 1rem;
 			}
+			#editor:not([hidden]) {
+				display: flex;
+				gap: 1.5rem;
+				align-items: flex-start;
+			}
+			#editor-fields {
+				flex: 1 1 16rem;
+				min-width: 16rem;
+			}
+			#resume-sheet {
+				position: relative;
+				background: white;
+				box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2);
+			}
+			#resume-canvas {
+				display: block;
+			}
+			#resume-text {
+				position: absolute;
+				inset: 0;
+				overflow: hidden;
+				line-height: 1;
+				text-size-adjust: none;
+				transform-origin: 0 0;
+			}
+			#resume-text span {
+				position: absolute;
+				color: transparent;
+				white-space: pre;
+				transform-origin: 0 0;
+			}
 		</style>
 	</head>
 	<body>
 		<button type="button" id="new-resume">New Resume</button>
 		<ul id="resumes" aria-label="Resumes"></ul>
 		<section id="editor" hidden>
-			<label>
-				Title
-				<input id="title" name="title" />
-			</label>
-			<button type="button" id="delete-resume">Delete</button>
-			<h2>Basics</h2>
-			<label>
-				Name
-				<input id="basics-name" name="name" autocomplete="name" />
-			</label>
-			<label>
-				Summary
-				<textarea id="summary" name="summary"></textarea>
-			</label>
-			<label>
-				Template
-				<select id="template"></select>
-			</label>
-			<label>
-				Paper
-				<select id="paper">
-					<option value="a4">A4</option>
-					<option value="letter">Letter</option>
-				</select>
-			</label>
-			<h2>Skills</h2>
-			<label>
-				Skill
-				<input id="skill" name="skill" />
-			</label>
-			<h2>Experience</h2>
-			<button type="button" id="add-item">Add Item</button>
-			<div id="experience-item" hidden>
+			<div id="editor-fields">
 				<label>
-					Company
-					<input id="company" name="company" />
+					Title
+					<input id="title" name="title" />
+				</label>
+				<button type="button" id="delete-resume">Delete</button>
+				<h2>Basics</h2>
+				<label>
+					Name
+					<input id="basics-name" name="name" autocomplete="name" />
 				</label>
 				<label>
-					Position
-					<input id="position" name="position" />
+					Summary
+					<textarea id="summary" name="summary"></textarea>
 				</label>
+				<label>
+					Template
+					<select id="template"></select>
+				</label>
+				<label>
+					Paper
+					<select id="paper">
+						<option value="a4">A4</option>
+						<option value="letter">Letter</option>
+					</select>
+				</label>
+				<h2>Skills</h2>
+				<label>
+					Skill
+					<input id="skill" name="skill" />
+				</label>
+				<h2>Experience</h2>
+				<button type="button" id="add-item">Add Item</button>
+				<div id="experience-item" hidden>
+					<label>
+						Company
+						<input id="company" name="company" />
+					</label>
+					<label>
+						Position
+						<input id="position" name="position" />
+					</label>
+				</div>
+				<button type="button" id="export-pdf">Export PDF</button>
+				<p id="persist" role="status"></p>
 			</div>
-			<button type="button" id="export-pdf">Export PDF</button>
-			<p id="persist" role="status"></p>
+			<section id="resume-page" aria-label="Page" hidden>
+				<div id="resume-sheet">
+					<canvas id="resume-canvas"></canvas>
+					<div id="resume-text"></div>
+				</div>
+			</section>
 		</section>
 		<form id="provider">
 			<label>
