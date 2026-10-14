@@ -3,12 +3,13 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
+const devPort = Number(process.env.REACTIVE_RESUME_DEV_PORT ?? 1420);
 
 export default defineConfig({
 	clearScreen: false,
 	server: {
 		host: "127.0.0.1",
-		port: 1420,
+		port: devPort,
 		strictPort: true,
 		fs: { allow: [repoRoot] },
 	},

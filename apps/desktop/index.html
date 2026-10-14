@@ -32,17 +32,54 @@
 		</style>
 	</head>
 	<body>
-		<form id="resume">
+		<button type="button" id="new-resume">New Resume</button>
+		<ul id="resumes" aria-label="Resumes"></ul>
+		<section id="editor" hidden>
+			<label>
+				Title
+				<input id="title" name="title" />
+			</label>
+			<button type="button" id="delete-resume">Delete</button>
+			<h2>Basics</h2>
 			<label>
 				Name
-				<input name="name" autocomplete="name" />
+				<input id="basics-name" name="name" autocomplete="name" />
 			</label>
 			<label>
 				Summary
-				<textarea name="summary"></textarea>
+				<textarea id="summary" name="summary"></textarea>
 			</label>
-			<button type="submit">Export PDF</button>
-		</form>
+			<label>
+				Template
+				<select id="template"></select>
+			</label>
+			<label>
+				Paper
+				<select id="paper">
+					<option value="a4">A4</option>
+					<option value="letter">Letter</option>
+				</select>
+			</label>
+			<h2>Skills</h2>
+			<label>
+				Skill
+				<input id="skill" name="skill" />
+			</label>
+			<h2>Experience</h2>
+			<button type="button" id="add-item">Add Item</button>
+			<div id="experience-item" hidden>
+				<label>
+					Company
+					<input id="company" name="company" />
+				</label>
+				<label>
+					Position
+					<input id="position" name="position" />
+				</label>
+			</div>
+			<button type="button" id="export-pdf">Export PDF</button>
+			<p id="persist" role="status"></p>
+		</section>
 		<p id="status" role="status"></p>
 		<script type="module" src="/src/main.ts"></script>
 	</body>
