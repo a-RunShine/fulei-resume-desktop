@@ -40,6 +40,12 @@
 				flex: 1 1 16rem;
 				min-width: 16rem;
 			}
+			#right-rail {
+				flex: 0 0 14rem;
+				width: 14rem;
+				max-height: calc(100vh - 4rem);
+				overflow: auto;
+			}
 			#resume-sheet {
 				position: relative;
 				background: white;
@@ -62,6 +68,14 @@
 				white-space: pre;
 				transform-origin: 0 0;
 			}
+			#preview-column {
+				flex: 0 0 auto;
+			}
+			#page-controls {
+				display: flex;
+				gap: 0.5rem;
+				margin-top: 0.5rem;
+			}
 		</style>
 	</head>
 	<body>
@@ -82,10 +96,6 @@
 				<label>
 					Summary
 					<textarea id="summary" name="summary"></textarea>
-				</label>
-				<label>
-					Template
-					<select id="template"></select>
 				</label>
 				<label>
 					Paper
@@ -114,12 +124,44 @@
 				<button type="button" id="export-pdf">Export PDF</button>
 				<p id="persist" role="status"></p>
 			</div>
-			<section id="resume-page" aria-label="Page" hidden>
-				<div id="resume-sheet">
-					<canvas id="resume-canvas"></canvas>
-					<div id="resume-text"></div>
+			<div id="preview-column">
+				<section id="resume-page" aria-label="Page" hidden>
+					<div id="resume-sheet">
+						<canvas id="resume-canvas"></canvas>
+						<div id="resume-text"></div>
+					</div>
+				</section>
+				<div id="page-controls">
+					<button type="button" id="previous-page">Previous page</button>
+					<p id="page-status"></p>
+					<button type="button" id="next-page">Next page</button>
 				</div>
-			</section>
+			</div>
+			<aside id="right-rail" aria-label="Settings">
+				<h2 id="template-current"></h2>
+				<img id="template-thumb" alt="" width="72" height="96" />
+				<label>
+					<input id="filter-single" type="checkbox" />
+					Single-column
+				</label>
+				<label>
+					<input id="filter-ats" type="checkbox" />
+					ATS friendly
+				</label>
+				<label>
+					Template
+					<select id="template"></select>
+				</label>
+				<section aria-label="Layout">
+					<h2>Layout</h2>
+					<div id="layout-pages"></div>
+					<button type="button" id="add-page">Add Page</button>
+					<label>
+						Sidebar Width
+						<input id="sidebar-width" type="range" min="10" max="50" step="1" />
+					</label>
+				</section>
+			</aside>
 		</section>
 		<form id="provider">
 			<label>

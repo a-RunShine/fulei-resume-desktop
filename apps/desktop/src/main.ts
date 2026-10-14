@@ -5,7 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { AnnotationMode, getDocument, GlobalWorkerOptions, TextLayer } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { createResumePdfBlob } from "@reactive-resume/pdf/browser";
 import { defaultResumeData } from "@reactive-resume/schema/resume/default";
-import { templateSchema } from "@reactive-resume/schema/templates";
+import { templateLayouts, templateSchema } from "@reactive-resume/schema/templates";
 
 GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/legacy/build/pdf.worker.min.mjs", import.meta.url).toString();
 
@@ -20,6 +20,8 @@ const nameInput = document.querySelector<HTMLInputElement>("#basics-name");
 const summaryInput = document.querySelector<HTMLTextAreaElement>("#summary");
 const addItemButton = document.querySelector<HTMLButtonElement>("#add-item");
 const templateSelect = document.querySelector<HTMLSelectElement>("#template");
+const singleColumnFilter = document.querySelector<HTMLInputElement>("#filter-single");
+const atsFilter = document.querySelector<HTMLInputElement>("#filter-ats");
 const paperSelect = document.querySelector<HTMLSelectElement>("#paper");
 const experienceItem = document.querySelector<HTMLElement>("#experience-item");
 const skillInput = document.querySelector<HTMLInputElement>("#skill");
@@ -27,9 +29,17 @@ const companyInput = document.querySelector<HTMLInputElement>("#company");
 const positionInput = document.querySelector<HTMLInputElement>("#position");
 const exportButton = document.querySelector<HTMLButtonElement>("#export-pdf");
 const resumePage = document.querySelector<HTMLElement>("#resume-page");
+const templateCurrent = document.querySelector<HTMLElement>("#template-current");
+const templateThumb = document.querySelector<HTMLImageElement>("#template-thumb");
+const layoutPages = document.querySelector<HTMLElement>("#layout-pages");
 const resumeSheet = document.querySelector<HTMLElement>("#resume-sheet");
 const resumeCanvas = document.querySelector<HTMLCanvasElement>("#resume-canvas");
 const resumeText = document.querySelector<HTMLDivElement>("#resume-text");
+const previousPageButton = document.querySelector<HTMLButtonElement>("#previous-page");
+const nextPageButton = document.querySelector<HTMLButtonElement>("#next-page");
+const pageStatus = document.querySelector<HTMLElement>("#page-status");
+const addPageButton = document.querySelector<HTMLButtonElement>("#add-page");
+const sidebarWidthInput = document.querySelector<HTMLInputElement>("#sidebar-width");
 const providerForm = document.querySelector<HTMLFormElement>("#provider");
 const providerStatus = document.querySelector<HTMLElement>("#provider-status");
 const reply = document.querySelector<HTMLElement>("#reply");
@@ -99,6 +109,9 @@ let previewGeneration = 0;
 let previewTimer = 0;
 let previewTask: PDFDocumentLoadingTask | undefined;
 let previewLayer: TextLayer | undefined;
+let previewBytes: Uint8Array | undefined;
+let previewPageCount = 0;
+let previewPageIndex = 0;
 let pdfQueue: Promise<void> = Promise.resolve();
 
 const renderResumePdf = (data: ResumeData) => {
@@ -116,16 +129,26 @@ const cancelPreviewLayer = () => {
 	previewLayer = undefined;
 };
 
-const paintPreview = async (data: ResumeData, generation: number) => {
+const updatePageControls = () => {
+	if (previousPageButton) previousPageButton.disabled = previewPageIndex <= 0;
+	if (nextPageButton) nextPageButton.disabled = previewPageIndex >= previewPageCount - 1;
+	if (pageStatus) {
+		pageStatus.textContent = previewPageCount === 0 ? "" : `${previewPageIndex + 1} of ${previewPageCount}`;
+	}
+};
+
+const paintStoredPage = async (bytes: Uint8Array, pageIndex: number, generation: number) => {
 	if (!resumePage || !resumeSheet || !resumeCanvas || !resumeText) return;
-	const blob = await renderResumePdf(data);
-	if (generation !== previewGeneration) return;
-	const task = getDocument({ data: new Uint8Array(await blob.arrayBuffer()), verbosity: 0 });
+	const task = getDocument({ data: bytes.slice(), verbosity: 0 });
 	previewTask = task;
 	try {
 		const pdf = await task.promise;
 		if (generation !== previewGeneration) return;
-		const pdfPage = await pdf.getPage(1);
+		previewPageCount = pdf.numPages;
+		const safeIndex = Math.min(Math.max(pageIndex, 0), Math.max(pdf.numPages - 1, 0));
+		previewPageIndex = safeIndex;
+		updatePageControls();
+		const pdfPage = await pdf.getPage(safeIndex + 1);
 		const viewport = pdfPage.getViewport({ scale: previewScale });
 		resumeSheet.style.width = `${viewport.width}px`;
 		resumeSheet.style.height = `${viewport.height}px`;
@@ -147,6 +170,14 @@ const paintPreview = async (data: ResumeData, generation: number) => {
 	}
 };
 
+const paintPreview = async (data: ResumeData, generation: number) => {
+	const blob = await renderResumePdf(data);
+	if (generation !== previewGeneration) return;
+	const bytes = new Uint8Array(await blob.arrayBuffer());
+	previewBytes = bytes;
+	await paintStoredPage(bytes, previewPageIndex, generation);
+};
+
 const schedulePreview = () => {
 	if (!resumeDocument) return;
 	cancelPreviewLayer();
@@ -156,7 +187,9 @@ const schedulePreview = () => {
 	previewTimer = window.setTimeout(() => {
 		void paintPreview(snapshot, generation).catch((error: unknown) => {
 			if (generation !== previewGeneration) return;
-			console.error(error instanceof Error ? error.message : String(error));
+			const message = error instanceof Error ? error.message : String(error);
+			if (pageStatus) pageStatus.textContent = message;
+			console.error(message);
 		});
 	}, 200);
 };
@@ -170,14 +203,22 @@ const hidePage = () => {
 	if (task) void task.destroy().catch(() => undefined);
 	resumeText?.replaceChildren();
 	resumePage?.setAttribute("hidden", "");
+	previewBytes = undefined;
+	previewPageCount = 0;
+	previewPageIndex = 0;
+	updatePageControls();
 };
 
 const showDocument = (title: string) => {
 	if (!resumeDocument) return;
+	previewPageIndex = 0;
 	if (titleInput) titleInput.value = title;
 	if (nameInput) nameInput.value = resumeDocument.basics.name;
 	if (summaryInput) summaryInput.value = summaryText(resumeDocument.summary.content);
-	if (templateSelect) templateSelect.value = resumeDocument.metadata.template;
+	renderTemplateOptions();
+	showTemplate(resumeDocument.metadata.template);
+	if (sidebarWidthInput) sidebarWidthInput.value = String(resumeDocument.metadata.layout.sidebarWidth);
+	renderLayout();
 	if (paperSelect) {
 		paperSelect.value = resumeDocument.metadata.page.format === "letter" ? "letter" : "a4";
 	}
@@ -302,9 +343,169 @@ nameInput?.addEventListener("input", () => {
 
 const isTemplate = (value: string): value is Template => templateSchema.options.some((template) => template === value);
 
+const templateName = (template: Template) => template.charAt(0).toUpperCase() + template.slice(1);
+
+const templateThumbnail = (template: Template) => {
+	const bars =
+		templateLayouts[template].columns === 1
+			? `<rect x="8" y="8" width="56" height="80" fill="#e8e4dc"/>`
+			: `<rect x="8" y="8" width="22" height="80" fill="#d9d3c7"/><rect x="34" y="8" width="30" height="80" fill="#efeae2"/>`;
+	const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="72" height="96" viewBox="0 0 72 96"><rect width="72" height="96" fill="#ffffff"/>${bars}</svg>`;
+	return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+};
+
+const showTemplate = (template: Template) => {
+	const name = templateName(template);
+	if (templateCurrent) templateCurrent.textContent = name;
+	if (templateThumb) {
+		templateThumb.alt = name;
+		templateThumb.src = templateThumbnail(template);
+	}
+};
+
+const templateVisible = (template: Template) => {
+	const layout = templateLayouts[template];
+	if (singleColumnFilter?.checked && layout.columns !== 1) return false;
+	if (atsFilter?.checked && !layout.atsSafe) return false;
+	return true;
+};
+
+const sectionLabels: Record<string, string> = {
+	profiles: "Profiles",
+	summary: "Summary",
+	education: "Education",
+	experience: "Experience",
+	projects: "Projects",
+	volunteer: "Volunteer",
+	references: "References",
+	skills: "Skills",
+	certifications: "Certifications",
+	awards: "Awards",
+	languages: "Languages",
+	interests: "Interests",
+	publications: "Publications",
+};
+
+const sectionLabel = (id: string) => sectionLabels[id] ?? id;
+
+const moveLabel = (id: string) => {
+	if (id === "summary") return "overview";
+	if (id === "skills") return "abilities";
+	return sectionLabel(id);
+};
+
+type LayoutColumn = "main" | "sidebar";
+
+const moveSection = (pageIndex: number, column: LayoutColumn, sectionId: string, direction: -1 | 1) => {
+	const layoutPage = resumeDocument?.metadata.layout.pages[pageIndex];
+	if (!layoutPage) return;
+	const items = layoutPage[column];
+	const index = items.indexOf(sectionId);
+	const neighbor = items[index + direction];
+	if (index < 0 || neighbor === undefined) return;
+	items[index] = neighbor;
+	items[index + direction] = sectionId;
+	saveDocument();
+	renderLayout();
+};
+
+const moveSectionToPage = (fromPage: number, column: LayoutColumn, sectionId: string, toPage: number) => {
+	const pages = resumeDocument?.metadata.layout.pages;
+	const from = pages?.[fromPage]?.[column];
+	const target = pages?.[toPage];
+	if (!from || !target) return;
+	const index = from.indexOf(sectionId);
+	if (index < 0) return;
+	from.splice(index, 1);
+	target.main.push(sectionId);
+	saveDocument();
+	renderLayout();
+};
+
+const renderLayout = () => {
+	const current = resumeDocument;
+	if (!layoutPages || !current) return;
+	layoutPages.replaceChildren();
+	current.metadata.layout.pages.forEach((layoutPage, pageIndex) => {
+		const group = document.createElement("div");
+		const heading = document.createElement("h3");
+		heading.textContent = `Page ${pageIndex + 1}`;
+		group.append(heading);
+		for (const column of ["main", "sidebar"] as const) {
+			const list = document.createElement("ol");
+			list.setAttribute("aria-label", column === "main" ? "Main" : "Sidebar");
+			for (const sectionId of layoutPage[column]) {
+				const item = document.createElement("li");
+				const label = sectionLabel(sectionId);
+				item.append(label);
+				const up = document.createElement("button");
+				up.type = "button";
+				up.textContent = "Up";
+				up.setAttribute("aria-label", `Raise ${moveLabel(sectionId)}`);
+				up.addEventListener("click", () => {
+					moveSection(pageIndex, column, sectionId, -1);
+				});
+				const down = document.createElement("button");
+				down.type = "button";
+				down.textContent = "Down";
+				down.setAttribute("aria-label", `Lower ${moveLabel(sectionId)}`);
+				down.addEventListener("click", () => {
+					moveSection(pageIndex, column, sectionId, 1);
+				});
+				item.append(up, down);
+				if (current.metadata.layout.pages[pageIndex + 1]) {
+					const onward = document.createElement("button");
+					onward.type = "button";
+					onward.textContent = "Onward";
+					onward.setAttribute("aria-label", `Onward ${moveLabel(sectionId)}`);
+					onward.addEventListener("click", () => {
+						moveSectionToPage(pageIndex, column, sectionId, pageIndex + 1);
+					});
+					item.append(onward);
+				}
+				list.append(item);
+			}
+			group.append(list);
+		}
+		layoutPages.append(group);
+	});
+};
+
+const renderTemplateOptions = () => {
+	if (!templateSelect) return;
+	const current = resumeDocument?.metadata.template;
+	const selected = current ?? (isTemplate(templateSelect.value) ? templateSelect.value : "onyx");
+	templateSelect.replaceChildren();
+	for (const template of templateSchema.options) {
+		if (!templateVisible(template) && template !== selected) continue;
+		const option = document.createElement("option");
+		option.value = template;
+		option.textContent = templateName(template);
+		templateSelect.append(option);
+	}
+	templateSelect.value = selected;
+};
+
+const addLayoutPage = () => {
+	if (!resumeDocument) return;
+	resumeDocument.metadata.layout.pages.push({ fullWidth: false, main: [], sidebar: [] });
+	saveDocument();
+	renderLayout();
+};
+
+const showPreviewPage = (pageIndex: number) => {
+	if (!previewBytes) return;
+	const generation = previewGeneration;
+	void paintStoredPage(previewBytes, pageIndex, generation).catch((error: unknown) => {
+		if (generation !== previewGeneration) return;
+		console.error(error instanceof Error ? error.message : String(error));
+	});
+};
+
 templateSelect?.addEventListener("change", () => {
 	if (!resumeDocument || !templateSelect || !isTemplate(templateSelect.value)) return;
 	resumeDocument.metadata.template = templateSelect.value;
+	showTemplate(templateSelect.value);
 	saveDocument();
 });
 
@@ -363,14 +564,25 @@ exportButton?.addEventListener("click", () => {
 	void exportResume().catch(showError);
 });
 
-if (templateSelect) {
-	for (const template of templateSchema.options) {
-		const option = document.createElement("option");
-		option.value = template;
-		option.textContent = template.charAt(0).toUpperCase() + template.slice(1);
-		templateSelect.append(option);
-	}
-}
+addPageButton?.addEventListener("click", addLayoutPage);
+sidebarWidthInput?.addEventListener("input", () => {
+	if (!resumeDocument || !sidebarWidthInput) return;
+	const width = Number(sidebarWidthInput.value);
+	if (!Number.isFinite(width)) return;
+	resumeDocument.metadata.layout.sidebarWidth = width;
+	saveDocument();
+});
+previousPageButton?.addEventListener("click", () => {
+	showPreviewPage(previewPageIndex - 1);
+});
+nextPageButton?.addEventListener("click", () => {
+	showPreviewPage(previewPageIndex + 1);
+});
+updatePageControls();
+
+renderTemplateOptions();
+singleColumnFilter?.addEventListener("change", renderTemplateOptions);
+atsFilter?.addEventListener("change", renderTemplateOptions);
 
 void refreshResumes().catch(showError);
 

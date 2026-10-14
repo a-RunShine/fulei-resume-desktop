@@ -86,9 +86,9 @@ const visualStudioCommand = (configPath: string) => {
 	return `call "${vcvars}" >nul && set PATH=C:\\Users\\Administrator\\.cargo\\bin;%PATH% && pnpm exec tauri dev --config "${configPath}"`;
 };
 
-const writeDevServerConfig = (directory: string) => {
+const writeDevServerConfig = (directory: string, port = devPort) => {
 	const configPath = join(directory, "tauri.dev.json");
-	writeFileSync(configPath, JSON.stringify({ build: { devUrl: `http://127.0.0.1:${devPort}` } }));
+	writeFileSync(configPath, JSON.stringify({ build: { devUrl: `http://127.0.0.1:${port}` } }));
 	return configPath;
 };
 
@@ -97,6 +97,16 @@ afterAll(() => {
 });
 
 const visiblePageText = async (region: Locator) => region.evaluate((node) => node.textContent ?? "");
+
+const textLeft = async (region: Locator, needle: string) =>
+	region.evaluate((node, sample) => {
+		const spans = [...node.querySelectorAll("span")].filter((span) => {
+			const text = span.textContent ?? "";
+			return text.length > 0 && sample.includes(text);
+		});
+		if (spans.length === 0) return -1;
+		return Math.min(...spans.map((span) => span.getBoundingClientRect().left));
+	}, needle);
 
 const pdfText = async (bytes: Uint8Array) => {
 	const document = await getDocument({ data: bytes, verbosity: 0 }).promise;
@@ -232,6 +242,7 @@ const launchDesktop = async (options: {
 	fresh?: boolean;
 	fonts?: boolean;
 	dataDirectory?: string;
+	devPort?: number;
 }): Promise<DesktopSession> => {
 	if (options.fresh !== false) rmSync(options.directory, { recursive: true, force: true });
 	const exportDirectory = join(options.directory, "export");
@@ -240,10 +251,11 @@ const launchDesktop = async (options: {
 	mkdirSync(userDataDirectory, { recursive: true });
 	const cacheDirectory = join(options.directory, "font-cache");
 	if (options.fonts) await seedPreparedFontCache(cacheDirectory);
+	const serverPort = options.devPort ?? devPort;
 
 	const logs: string[] = [];
 	const pageErrors: string[] = [];
-	const devConfig = writeDevServerConfig(options.directory);
+	const devConfig = writeDevServerConfig(options.directory, serverPort);
 	windowProcess = spawn(visualStudioCommand(devConfig), {
 		cwd: desktopRoot,
 		shell: true,
@@ -252,7 +264,7 @@ const launchDesktop = async (options: {
 			PATH: `C:\\Users\\Administrator\\.cargo\\bin;${process.env.PATH ?? ""}`,
 			REACTIVE_RESUME_FONT_CACHE: cacheDirectory,
 			REACTIVE_RESUME_EXPORT_DIR: exportDirectory,
-			REACTIVE_RESUME_DEV_PORT: String(devPort),
+			REACTIVE_RESUME_DEV_PORT: String(serverPort),
 			REACTIVE_RESUME_DB: options.databasePath,
 			...(options.dataDirectory ? { REACTIVE_RESUME_DATA_DIR: options.dataDirectory } : {}),
 			WEBVIEW2_USER_DATA_FOLDER: userDataDirectory,
@@ -279,11 +291,11 @@ const launchDesktop = async (options: {
 		const context = browser.contexts()[0];
 		if (!context) throw new Error("desktop window has no page");
 		const page =
-			context.pages().find((candidate) => candidate.url().includes(String(devPort))) ??
+			context.pages().find((candidate) => candidate.url().includes(String(serverPort))) ??
 			context.pages()[0] ??
 			(await context.waitForEvent("page", { timeout: 180_000 }));
 		page.setDefaultTimeout(30_000);
-		await page.waitForURL(`**127.0.0.1:${devPort}/**`, { timeout: 180_000 });
+		await page.waitForURL(`**127.0.0.1:${serverPort}/**`, { timeout: 180_000 });
 		page.on("pageerror", (error) => pageErrors.push(error.message));
 		page.on("console", (message) => {
 			if (message.type() === "error") pageErrors.push(message.text());
@@ -671,6 +683,116 @@ it("shows the Page before any export and updates it when the name and Summary ch
 		await page.getByLabel("Summary").fill(summary);
 		await expectPage.poll(async () => visiblePageText(resumePage), { timeout: 180_000 }).toContain(summary);
 		expect(await visiblePageText(resumePage)).toContain(basicsName);
+		expect(blocked.some((url) => /fonts\.gstatic\.(com|cn)/.test(url))).toBe(false);
+	} catch (error) {
+		const detail = pageErrors.join("\n").slice(-4000);
+		throw new Error(`${error instanceof Error ? error.message : String(error)}\n${detail}`);
+	} finally {
+		await session.close();
+	}
+});
+
+it("shows the current Template, filters the list, and updates the Page when the Template or Layout changes", async () => {
+	const directory = join(tmpdir(), `reactive-resume-right-rail-${process.pid}`);
+	const session = await launchDesktop({
+		port: 9277,
+		devPort: 1488,
+		directory,
+		databasePath: join(directory, "resumes.sqlite"),
+		fonts: true,
+	});
+	const page = session.page;
+	const blocked = await blockExternal(page);
+	const summary = "我是一名前端工程师，熟悉 React 与 TypeScript。";
+	const skill = "排版";
+	const pageErrors: string[] = [];
+	page.on("pageerror", (error) => pageErrors.push(error.message));
+	page.on("console", (message) => {
+		if (message.type() === "error") pageErrors.push(message.text());
+	});
+	page.setDefaultTimeout(180_000);
+	try {
+		await page.getByRole("button", { name: "New Resume" }).click();
+		const rail = page.getByRole("complementary", { name: "Settings" });
+		const resumePage = page.getByRole("region", { name: "Page" });
+		await expectPage(rail.getByRole("heading", { name: "Onyx", exact: true })).toBeVisible();
+		await expectPage(rail.getByRole("img", { name: "Onyx" })).toBeVisible();
+		const templateOptions = rail.getByLabel("Template").locator("option");
+		await expectPage(templateOptions.filter({ hasText: "Azurill" })).toHaveCount(1);
+		await rail.getByRole("checkbox", { name: "Single-column" }).check();
+		await expectPage(templateOptions.filter({ hasText: "Azurill" })).toHaveCount(0);
+		await expectPage(templateOptions.filter({ hasText: "Onyx" })).toHaveCount(1);
+		await rail.getByRole("checkbox", { name: "Single-column" }).uncheck();
+		await expectPage(templateOptions.filter({ hasText: "Azurill" })).toHaveCount(1);
+		await rail.getByRole("checkbox", { name: "ATS friendly" }).check();
+		await expectPage(templateOptions.filter({ hasText: "Azurill" })).toHaveCount(0);
+		await expectPage(templateOptions.filter({ hasText: "Onyx" })).toHaveCount(1);
+		await rail.getByRole("checkbox", { name: "ATS friendly" }).uncheck();
+
+		await page.getByLabel("Summary").fill(summary);
+		await page.getByLabel("Skill").fill(skill);
+		await expectPage.poll(async () => visiblePageText(resumePage), { timeout: 180_000 }).toContain(skill);
+		const onyxSkill = await textLeft(resumePage, skill);
+		const onyxSummary = await textLeft(resumePage, summary);
+		expect(onyxSkill).toBeGreaterThan(0);
+		expect(Math.abs(onyxSummary - onyxSkill)).toBeLessThan(20);
+
+		await rail.getByLabel("Template").selectOption("Azurill");
+		await expectPage(rail.getByRole("heading", { name: "Azurill", exact: true })).toBeVisible();
+		await expectPage(rail.getByRole("img", { name: "Azurill" })).toBeVisible();
+		await expectPage
+			.poll(
+				async () => {
+					const skillLeft = await textLeft(resumePage, skill);
+					const summaryLeft = await textLeft(resumePage, summary);
+					return summaryLeft - skillLeft;
+				},
+				{ timeout: 180_000 },
+			)
+			.toBeGreaterThan(24);
+
+		const company = "北风实验室";
+		await page.getByRole("button", { name: "Add Item" }).click();
+		await page.getByLabel("Company").fill(company);
+		await expectPage.poll(async () => visiblePageText(resumePage), { timeout: 180_000 }).toContain(company);
+		const beforeOrder = await visiblePageText(resumePage);
+		expect(beforeOrder.indexOf(summary)).toBeLessThan(beforeOrder.indexOf(company));
+		const moveExperienceUp = rail.getByRole("button", { name: "Raise Experience" });
+		await moveExperienceUp.click();
+		await moveExperienceUp.click();
+		await expectPage
+			.poll(
+				async () => {
+					const text = await visiblePageText(resumePage);
+					return text.includes(company) && text.indexOf(company) < text.indexOf(summary);
+				},
+				{ timeout: 180_000 },
+			)
+			.toBe(true);
+
+		await rail.getByRole("button", { name: "Add Page" }).click({ timeout: 5_000 });
+		await expectPage(rail.getByRole("heading", { name: "Page 2", exact: true })).toBeVisible({ timeout: 5_000 });
+		await rail.getByRole("button", { name: "Onward overview" }).click();
+		await expectPage.poll(async () => visiblePageText(resumePage), { timeout: 180_000 }).not.toContain(summary);
+		await expectPage.poll(async () => page.locator("#page-status").innerText(), { timeout: 180_000 }).toBe("1 of 2");
+		await page.getByRole("button", { name: "Next page" }).click();
+		await expectPage.poll(async () => visiblePageText(resumePage), { timeout: 180_000 }).toContain(summary);
+		await page.getByRole("button", { name: "Previous page" }).click();
+		await expectPage
+			.poll(
+				async () => {
+					const text = await visiblePageText(resumePage);
+					return text.includes(company) && !text.includes(summary);
+				},
+				{ timeout: 180_000 },
+			)
+			.toBe(true);
+		const beforeWidth = await textLeft(resumePage, company);
+		expect(beforeWidth).toBeGreaterThan(0);
+		await rail.getByLabel("Sidebar Width").fill("50", { timeout: 5_000 });
+		await expectPage
+			.poll(async () => (await textLeft(resumePage, company)) - beforeWidth, { timeout: 180_000 })
+			.toBeGreaterThan(10);
 		expect(blocked.some((url) => /fonts\.gstatic\.(com|cn)/.test(url))).toBe(false);
 	} catch (error) {
 		const detail = pageErrors.join("\n").slice(-4000);
