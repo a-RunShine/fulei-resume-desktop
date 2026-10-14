@@ -1047,3 +1047,69 @@ it("shows the current Template, filters the list, and updates the Page when the 
 		await session.close();
 	}
 });
+
+it("keeps the Page visible while the sidebars collapse, and the export matches after a restart", async () => {
+	const directory = join(tmpdir(), `reactive-resume-columns-${process.pid}`);
+	const databasePath = join(directory, "resumes.sqlite");
+	const basicsName = "张三";
+	const summary = "我是一名前端工程师，熟悉 React 与 TypeScript。";
+	const title = "三栏简历";
+	const first = await launchDesktop({
+		port: 9288,
+		devPort: 1492,
+		directory,
+		databasePath,
+		fonts: true,
+	});
+	const blocked = await blockExternal(first.page);
+	try {
+		await first.page.getByRole("button", { name: "New Resume" }).click();
+		await first.page.getByLabel("Title").fill(title);
+		await first.page.getByRole("button", { name: title }).waitFor();
+		await first.page.getByLabel("Name", { exact: true }).fill(basicsName);
+		await openSection(first.page, "Summary");
+		await first.page.getByRole("textbox", { name: "Summary" }).fill(summary);
+		const resumePage = first.page.getByRole("region", { name: "Page" });
+		await expectPage.poll(async () => visiblePageText(resumePage), { timeout: 180_000 }).toContain(basicsName);
+		await first.page.getByRole("button", { name: "Toggle left sidebar" }).click();
+		await expectPage(first.page.getByRole("navigation", { name: "Sections" })).toBeHidden();
+		await expectPage(resumePage).toBeVisible();
+		await first.page.getByRole("button", { name: "Toggle left sidebar" }).click();
+		await expectPage(first.page.getByLabel("Name", { exact: true })).toHaveValue(basicsName);
+		await first.page.getByRole("button", { name: "Toggle right sidebar" }).click();
+		await expectPage(first.page.getByRole("complementary", { name: "Settings" })).toBeHidden();
+		await expectPage(resumePage).toBeVisible();
+		await first.page.getByRole("button", { name: "Toggle right sidebar" }).click();
+		await first.page.getByRole("complementary", { name: "Settings" }).getByLabel("Template").selectOption("Bronzor");
+		first.page.setDefaultTimeout(180_000);
+		await first.page.getByRole("button", { name: "Export PDF" }).click();
+		await first.page.getByText(/^Exported /).waitFor();
+		const pdfPath = (await first.page.getByText(/^Exported /).innerText()).replace(/^Exported\s+/, "").trim();
+		const exported = await pdfText(new Uint8Array(readFileSync(pdfPath)));
+		expect(exported).toContain(basicsName);
+		expect(exported).toContain(summary);
+		expect(blocked.some((url) => /fonts\.gstatic\.(com|cn)/.test(url))).toBe(false);
+	} finally {
+		await first.close();
+	}
+
+	const second = await launchDesktop({
+		port: 9289,
+		devPort: 1493,
+		directory,
+		databasePath,
+		fonts: true,
+		fresh: false,
+	});
+	try {
+		await second.page.getByRole("button", { name: title }).click();
+		await expectPage(second.page.getByLabel("Name", { exact: true })).toHaveValue(basicsName);
+		await openSection(second.page, "Summary");
+		await expectPage(second.page.getByRole("textbox", { name: "Summary" })).toHaveValue(summary);
+		await expectPage(second.page.getByRole("complementary", { name: "Settings" }).getByLabel("Template")).toHaveValue(
+			"bronzor",
+		);
+	} finally {
+		await second.close();
+	}
+});

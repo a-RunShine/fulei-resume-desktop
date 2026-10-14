@@ -59,6 +59,10 @@ const providerForm = document.querySelector<HTMLFormElement>("#provider");
 const providerStatus = document.querySelector<HTMLElement>("#provider-status");
 const reply = document.querySelector<HTMLElement>("#reply");
 const askButton = document.querySelector<HTMLButtonElement>("#ask");
+const toggleLeftButton = document.querySelector<HTMLButtonElement>("#toggle-left");
+const toggleRightButton = document.querySelector<HTMLButtonElement>("#toggle-right");
+const editorFields = document.querySelector<HTMLElement>("#editor-fields");
+const rightRail = document.querySelector<HTMLElement>("#right-rail");
 const sections = document.querySelector<HTMLElement>("#sections");
 
 const railSections = ["picture", "basics", "summary", "profiles", "experience", "education"] as const;
@@ -723,6 +727,20 @@ updatePageControls();
 renderTemplateOptions();
 singleColumnFilter?.addEventListener("change", renderTemplateOptions);
 atsFilter?.addEventListener("change", renderTemplateOptions);
+
+const toggleHidden = (element: HTMLElement | null) => {
+	if (!element) return;
+	if (element.hasAttribute("hidden")) element.removeAttribute("hidden");
+	else element.setAttribute("hidden", "");
+};
+
+toggleLeftButton?.addEventListener("click", () => {
+	toggleHidden(editorFields);
+});
+
+toggleRightButton?.addEventListener("click", () => {
+	toggleHidden(rightRail);
+});
 
 void refreshResumes().catch(showError);
 
