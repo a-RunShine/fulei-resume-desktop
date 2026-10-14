@@ -22,6 +22,10 @@ const skillInput = document.querySelector<HTMLInputElement>("#skill");
 const companyInput = document.querySelector<HTMLInputElement>("#company");
 const positionInput = document.querySelector<HTMLInputElement>("#position");
 const exportButton = document.querySelector<HTMLButtonElement>("#export-pdf");
+const providerForm = document.querySelector<HTMLFormElement>("#provider");
+const providerStatus = document.querySelector<HTMLElement>("#provider-status");
+const reply = document.querySelector<HTMLElement>("#reply");
+const askButton = document.querySelector<HTMLButtonElement>("#ask");
 
 type ResumeListItem = {
 	id: string;
@@ -41,6 +45,8 @@ const showError = (error: unknown) => {
 	if (!status) return;
 	status.textContent = error instanceof Error ? error.message : String(error);
 };
+
+const messageFrom = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 const escapeHtml = (value: string) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 
@@ -277,3 +283,53 @@ if (templateSelect) {
 }
 
 void refreshResumes().catch(showError);
+
+const applyProvider = async () => {
+	const settings = await invoke<{ baseUrl: string; model: string }>("load_provider");
+	const baseUrl = providerForm?.querySelector<HTMLInputElement>("[name=baseUrl]");
+	const model = providerForm?.querySelector<HTMLInputElement>("[name=model]");
+	if (baseUrl && baseUrl.value === "") baseUrl.value = settings.baseUrl;
+	if (model && model.value === "") model.value = settings.model;
+};
+
+void applyProvider().catch((error: unknown) => {
+	if (providerStatus) providerStatus.textContent = messageFrom(error);
+});
+
+providerForm?.addEventListener("submit", (event) => {
+	event.preventDefault();
+	if (!providerForm || !providerStatus) return;
+	const value = (field: string) => providerForm.querySelector<HTMLInputElement>(`[name="${field}"]`)?.value ?? "";
+	providerStatus.textContent = "";
+	void invoke("save_provider", {
+		baseUrl: value("baseUrl"),
+		model: value("model"),
+		apiKey: value("apiKey"),
+	})
+		.then(() => {
+			providerStatus.textContent = "Provider saved";
+			const field = providerForm.querySelector<HTMLInputElement>('[name="apiKey"]');
+			if (field) field.value = "";
+		})
+		.catch((error: unknown) => {
+			providerStatus.textContent = messageFrom(error);
+		});
+});
+
+let asking = false;
+
+askButton?.addEventListener("click", () => {
+	if (asking || !reply) return;
+	asking = true;
+	reply.textContent = "";
+	void invoke<string>("ask_assistant", { resume: JSON.stringify(resumeDocument ?? blankResume()) })
+		.then((text) => {
+			reply.textContent = text;
+		})
+		.catch((error: unknown) => {
+			reply.textContent = messageFrom(error);
+		})
+		.finally(() => {
+			asking = false;
+		});
+});
