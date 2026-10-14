@@ -1,5 +1,15 @@
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	copyFileSync,
+	existsSync,
+	mkdirSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	statSync,
+	writeFileSync,
+} from "node:fs";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -219,6 +229,7 @@ const launchDesktop = async (options: {
 	databasePath: string;
 	fresh?: boolean;
 	fonts?: boolean;
+	dataDirectory?: string;
 }): Promise<DesktopSession> => {
 	if (options.fresh !== false) rmSync(options.directory, { recursive: true, force: true });
 	const exportDirectory = join(options.directory, "export");
@@ -241,6 +252,7 @@ const launchDesktop = async (options: {
 			REACTIVE_RESUME_EXPORT_DIR: exportDirectory,
 			REACTIVE_RESUME_DEV_PORT: String(devPort),
 			REACTIVE_RESUME_DB: options.databasePath,
+			...(options.dataDirectory ? { REACTIVE_RESUME_DATA_DIR: options.dataDirectory } : {}),
 			WEBVIEW2_USER_DATA_FOLDER: userDataDirectory,
 			REACTIVE_RESUME_DEBUG_PORT: String(options.port),
 		},
@@ -484,5 +496,144 @@ it("exports a PDF in the selected Template and paper size", async () => {
 		expect(exported.height).toBeCloseTo(792, 0);
 	} finally {
 		await session.close();
+	}
+});
+
+const headerValue = (value: IncomingMessage["headers"]["authorization"]) => (Array.isArray(value) ? value[0] : value);
+
+const startSessionProvider = async (replyText: string) => {
+	const requests: { url: string; body: string }[] = [];
+	const server = createServer((request: IncomingMessage, response: ServerResponse) => {
+		const chunks: Buffer[] = [];
+		request.on("data", (chunk: Buffer) => chunks.push(chunk));
+		request.on("end", () => {
+			const host = headerValue(request.headers.host) ?? "";
+			requests.push({ url: `http://${host}${request.url ?? ""}`, body: Buffer.concat(chunks).toString("utf8") });
+			response.writeHead(200, { "Content-Type": "application/json" });
+			response.end(JSON.stringify({ choices: [{ message: { content: replyText } }] }));
+		});
+	});
+	await new Promise<void>((resolve) => {
+		server.listen(0, "127.0.0.1", resolve);
+	});
+	const address = server.address();
+	if (address === null || typeof address === "string") throw new Error("provider stub has no port");
+	return {
+		requests,
+		baseUrl: `http://127.0.0.1:${address.port}/v1`,
+		close: () =>
+			new Promise<void>((resolve, reject) => {
+				server.close((error) => (error ? reject(error) : resolve()));
+			}),
+	};
+};
+
+const filesUnder = (directory: string) => {
+	if (!existsSync(directory)) return [];
+	return readdirSync(directory, { encoding: "utf8", recursive: true })
+		.map((entry) => join(directory, entry))
+		.filter((path) => statSync(path).isFile());
+};
+
+const blockExternal = async (page: Page) => {
+	const blocked: string[] = [];
+	await page.route(isExternalHost, (route) => {
+		blocked.push(route.request().url());
+		return route.abort();
+	});
+	return blocked;
+};
+
+it("runs the offline desktop session", async () => {
+	const sessionName = "张三";
+	const sessionSummary = "我是一名前端工程师，熟悉 React 与 TypeScript。";
+	const sessionTitle = "张三的简历";
+	const apiKey = "sk-session-key-not-in-resume";
+	const replyText = "会话回复";
+	const missingDirectory = join(tmpdir(), `reactive-resume-session-missing-${process.pid}`);
+	const missing = await launchDesktop({
+		port: 9242,
+		directory: missingDirectory,
+		databasePath: join(missingDirectory, "resumes.sqlite"),
+	});
+	await blockExternal(missing.page);
+	try {
+		await missing.page.getByRole("button", { name: "New Resume" }).click();
+		await missing.page.getByLabel("Name", { exact: true }).fill(sessionName);
+		await missing.page.getByLabel("Summary").fill(sessionSummary);
+		await missing.page.getByRole("button", { name: "Export PDF" }).click();
+		await missing.page.getByText(/Fonts could not be loaded/).waitFor();
+		await expectPage(missing.page.locator("#status")).toContainText("Noto Serif SC");
+		expect(existsSync(join(missingDirectory, "export", "resume.pdf"))).toBe(false);
+	} finally {
+		await missing.close();
+	}
+
+	const directory = join(tmpdir(), `reactive-resume-session-${process.pid}`);
+	const databasePath = join(directory, "resumes.sqlite");
+	const dataDirectory = join(directory, "data");
+	const first = await launchDesktop({
+		port: 9243,
+		directory,
+		databasePath,
+		dataDirectory,
+		fonts: true,
+	});
+	const blocked = await blockExternal(first.page);
+	try {
+		await first.page.getByRole("button", { name: "New Resume" }).click();
+		await first.page.getByLabel("Title").fill(sessionTitle);
+		await first.page.getByRole("button", { name: sessionTitle }).waitFor();
+		await first.page.getByLabel("Name", { exact: true }).fill(sessionName);
+		await first.page.getByLabel("Summary").fill(sessionSummary);
+		await first.page.getByLabel("Template").selectOption("Bronzor");
+		first.page.setDefaultTimeout(180_000);
+		await first.page.getByRole("button", { name: "Export PDF" }).click();
+		await first.page.getByText(/^Exported /).waitFor();
+		const pdfPath = (await first.page.getByText(/^Exported /).innerText()).replace(/^Exported\s+/, "").trim();
+		const exported = await pdfText(new Uint8Array(readFileSync(pdfPath)));
+		expect(exported).toContain(sessionName);
+		expect(exported).toContain(sessionSummary);
+		expect(blocked.some((url) => /fonts\.gstatic\.(com|cn)/.test(url))).toBe(false);
+	} finally {
+		await first.close();
+	}
+
+	const provider = await startSessionProvider(replyText);
+	const second = await launchDesktop({
+		port: 9244,
+		directory,
+		databasePath,
+		dataDirectory,
+		fonts: true,
+		fresh: false,
+	});
+	await blockExternal(second.page);
+	try {
+		await second.page.getByRole("button", { name: sessionTitle }).click();
+		await expectPage(second.page.getByLabel("Name", { exact: true })).toHaveValue(sessionName);
+		await expectPage(second.page.getByLabel("Summary")).toHaveValue(sessionSummary);
+		await expectPage(second.page.getByLabel("Template")).toHaveValue("bronzor");
+		second.page.setDefaultTimeout(180_000);
+		await second.page.getByRole("button", { name: "Export PDF" }).click();
+		await second.page.getByText(/^Exported /).waitFor();
+
+		await second.page.getByLabel("Provider").fill(provider.baseUrl);
+		await second.page.getByLabel("Model").fill("desktop-stub");
+		await second.page.getByLabel("API key").fill(apiKey);
+		await second.page.getByRole("button", { name: "Save Provider" }).click();
+		await second.page.getByText("Provider saved").waitFor();
+		await second.page.getByRole("button", { name: "Ask Assistant" }).click();
+		await second.page.getByText(replyText).waitFor();
+		expect(provider.requests.map((request) => request.url)).toEqual([`${provider.baseUrl}/chat/completions`]);
+
+		const stored = [databasePath, ...filesUnder(dataDirectory)];
+		expect(stored.length).toBeGreaterThan(1);
+		for (const path of stored) {
+			expect(readFileSync(path).includes(apiKey)).toBe(false);
+		}
+	} finally {
+		await second.close();
+		await provider.close();
 	}
 });
