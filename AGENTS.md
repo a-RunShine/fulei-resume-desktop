@@ -2,26 +2,6 @@
 
 This file applies across the repository. Follow a closer `AGENTS.md` when one exists. Keep this guide focused on agent workflows; user-facing documentation lives in `README.md` and `docs/`. Format guidance: [agents.md](https://agents.md/).
 
-<!-- caveman-begin -->
-
-Respond terse like smart caveman. All technical substance stay. Only fluff die.
-
-Rules:
-
-- Drop: articles (a/an/the), filler (just/really/basically), pleasantries, hedging
-- Fragments OK. Short synonyms. Technical terms exact. Code unchanged.
-- Pattern: [thing] [action] [reason]. [next step].
-- Not: "Sure! I'd be happy to help you with that."
-- Yes: "Bug in auth middleware. Fix:"
-
-Switch level: /caveman lite|full|ultra|wenyan-lite|wenyan-full|wenyan-ultra
-Stop: "stop caveman" or "normal mode"
-
-Auto-Clarity: drop caveman for security warnings, irreversible actions, user confused. Resume after.
-
-Boundaries: code/commits/PRs written normal.
-<!-- caveman-end -->
-
 <!-- BEGIN:turborepo-agent-rules -->
 
 # This is NOT the Turborepo you know
@@ -36,6 +16,7 @@ This block is written and re-added by `turbo` before repository-scoped commands 
 ## Agent skills
 
 - Issues and specs: GitHub Issues for `reactive-resume/reactive-resume`. See `docs/agents/issue-tracker.md`.
+- Domain docs: single-context. Root `GLOSSARY.md` and `docs/adr/`; read before exploring. See `docs/agents/domain.md`.
 - Check `git status --short` before editing. Preserve unrelated changes, including existing edits in this file.
 - Use scripts and configuration as the source of truth when documentation disagrees with them.
 
@@ -49,7 +30,7 @@ Internal packages are source-consumed through `package.json` export maps pointin
 
 ## Setup
 
-Prerequisites: **Node.js 24** (`.nvmrc`, root `engines`, and Dockerfile), **pnpm 12.8.1** (root `packageManager`; pnpm self-manages to this version), and **Docker with Docker Compose** for local infrastructure. The Dockerfile's `ARG PNPM_VERSION` chooses its base image, not the project's pnpm version. Start your Docker daemon before running Compose.
+Prerequisites: **Node.js 24** (`.nvmrc`, root `engines`, and Dockerfile), **pnpm 12.11.2** (root `packageManager`; pnpm self-manages to this version), and **Docker with Docker Compose** for local infrastructure. The Dockerfile's `ARG PNPM_VERSION` chooses its base image, not the project's pnpm version. Start your Docker daemon before running Compose.
 
 Shared dependency versions live in the default `catalog` in `pnpm-workspace.yaml`. Use `catalog:` in workspace manifests when that shared range applies; keep intentional exact pins and peer dependency ranges explicit.
 
@@ -62,16 +43,7 @@ docker compose -f compose.dev.yml up -d postgres redis seaweedfs seaweedfs_creat
 docker compose -f compose.dev.yml ps
 ```
 
-Copy the environment template only when `.env.local` does not already exist. For host-run development, edit these values in `.env.local`; the template uses container hostnames:
-
-```dotenv
-APP_URL=http://localhost:3000
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres
-S3_ENDPOINT=http://localhost:8333
-REDIS_URL=redis://localhost:6379
-```
-
-Set `AUTH_SECRET` to a generated secret (`openssl rand -hex 32`). If using saved AI providers or the assistant, also set a separate `ENCRYPTION_SECRET` of at least 32 characters. For database-only development, start just `postgres` and set `STORAGE_BACKEND=local` to avoid the template's S3 defaults.
+Copy `.env.example` to `.env.local` if it does not exist, then set the values listed in "Environment and database" below.
 
 ## Development workflow
 
@@ -144,13 +116,12 @@ Multi-place changes:
 
 ## Environment and database
 
-Host development requires `APP_URL`, `DATABASE_URL`, and non-empty `AUTH_SECRET`. `packages/env/src/server.ts` also loads root `.env` through Node's native `process.loadEnvFile`; existing process variables take precedence. Root dev/database scripts explicitly load `.env.local` through `dotenvx`. Tests and application code can have their own environment loaders; do not assume every command loads `.env.local`.
-
-- **Storage**: explicit `STORAGE_BACKEND=local|s3|blob` wins. Otherwise, complete S3 credentials select S3; Vercel selects private Blob; other deployments select local storage. `.env.example` ships SeaweedFS defaults, so either run SeaweedFS or select `local`/remove the S3 credentials. Local storage defaults to `<workspace>/data` in development and `/app/data` in Docker. `LOCAL_STORAGE_PATH` must be absolute and writable; persist it in deployed installations.
-- **`ENCRYPTION_SECRET`** is required for saved AI providers and the assistant. **`REDIS_URL`** is optional outside Vercel; it shares rate limits, cancellation and resumable replies between processes. Vercel deployment preparation requires Redis. Host-run dev uses `REDIS_URL=redis://localhost:6379`; the container-run app uses `redis://redis:6379`.
-- **`drizzle-kit` (used by `pnpm db:migrate`) reads `DATABASE_URL` from `process.env` directly** — it does not auto-load `.env`. The root migration scripts load `.env.local` through `dotenvx` before invoking Drizzle Kit.
-- `DATABASE_MIGRATION_URL` supplies a direct migration connection when runtime `DATABASE_URL` is pooled. Review generated migration SQL before applying it; avoid resetting databases or deleting volumes to fix setup errors.
-- Startup verifies the migrated schema. `STRICT_SCHEMA_CHECK=true` makes detected drift fatal; otherwise the server logs it and continues.
+- Host dev needs `APP_URL`, `DATABASE_URL`, and a non-empty `AUTH_SECRET` (generate with `openssl rand -hex 32`). `.env.example` uses container hostnames, so use `localhost` for host-run code. Full reference: `docs/self-hosting/environment-variables.mdx`.
+- `drizzle-kit` reads `DATABASE_URL` from `process.env` and does not load `.env`; root migration scripts load `.env.local` through `dotenvx`.
+- Storage: explicit `STORAGE_BACKEND=local|s3|blob` wins. Otherwise complete S3 credentials select S3, Vercel selects private Blob, and other deployments use local storage. For database-only dev, start just `postgres` and set `STORAGE_BACKEND=local`.
+- `ENCRYPTION_SECRET` (at least 32 characters) is required for saved AI providers and the assistant. `REDIS_URL` is optional outside Vercel; it shares rate limits, cancellation, and resumable replies between processes.
+- `DATABASE_MIGRATION_URL` gives a direct migration connection when `DATABASE_URL` is pooled. Review generated migration SQL before applying it, and never reset databases or delete volumes to fix setup errors.
+- Startup verifies the migrated schema. `STRICT_SCHEMA_CHECK=true` makes detected drift fatal.
 
 ## Testing and checks
 
@@ -192,6 +163,7 @@ pnpm test:e2e:ui
 
 ## Code style
 
+- Do not add code comments of any kind (`//`, `/* */`, `#`, or `<!-- -->` inside code). Express intent through names, types, and tests.
 - TypeScript is strict, including `exactOptionalPropertyTypes`, `noUncheckedIndexedAccess`, and unused-symbol checks; packages typecheck with `tsgo --noEmit`.
 - Oxlint checks code with its native React Compiler and accessibility rules. Oxfmt uses tabs, double quotes, 120-column lines, separated type import groups, and sorted Tailwind classes in `clsx`, `cva`, and `cn`. Use existing file naming and feature-local conventions.
 - **`pnpm check` modifies files**: it regenerates PDF translations, applies safe Oxlint fixes, runs Oxfmt, then fails on remaining lint errors or warnings. Review the diff; use `pnpm lint` and `pnpm format:check` for non-mutating checks.
@@ -214,13 +186,8 @@ NODE_ENV=production pnpm start
 docker compose up -d --build
 ```
 
-- Build outputs: `apps/web/dist` (SPA/assets), `apps/web/dist-prerender` (localized marketing HTML), and `apps/server/dist` (`index.mjs` plus server/deployment chunks). `pnpm start` runs the built server; set `NODE_ENV=production` so it uses `PORT` instead of `SERVER_PORT`. Export runtime variables or provide root `.env`; `.env.local` is not loaded by `start`.
-- Production Compose loads `.env.example` then `.env`, not `.env.local`. Configure `.env` with container hostnames (`postgres`, `redis`, `seaweedfs`) and production secrets before running it. The Docker image runs as `node`, listens on `3000`, and persists local storage through `/app/data`. Health endpoint: `/api/health`.
-- `vercel.json` defines Vercel Services (project framework must be `Services`): `frontend` (`apps/web`, static `dist`) and `backend` (`apps/server`, entrypoint `apps/server/vercel.mjs` re-exporting the tsdown build). The backend build runs `pnpm build` for both apps, then `node apps/server/dist/prepare-deployment.mjs`. Top-level rewrites send paths whose last segment has a file extension to `frontend` and everything else, including HTML shells, to `backend`, except the server-owned paths listed first. The Function uses Node 24 and a 300-second budget. `outputDirectory: "."` on `backend` stops the builder from treating `dist/index.mjs` (the Docker entrypoint) as the handler.
-- Vercel environment normalization accepts `POSTGRES_URL`, direct/unpooled DB aliases, and `KV_URL`. `APP_URL` can be derived from Vercel host variables. Blob is the default when no S3 credentials are set. Preview deployments require isolated resources before enabling `ALLOW_PREVIEW_MIGRATIONS=true`; see `docs/self-hosting/vercel.mdx`.
-- `.github/workflows/e2e.yml` gates core unit/browser flows; `vercel.yml` builds and checks the serverless artifact on PRs and pushes to `main`. `autofix.yml` runs write-capable `pnpm knip --fix` and `pnpm check`. GitHub runners are the default; `USE_BLACKSMITH=true` switches runners and paired actions.
-- `docker-build.yml` publishes native AMD64/ARM64 images. `main` publishes nightly aliases; release tags/explicit release dispatch publish stable aliases and can trigger configured production integrations. See `docs/agents/container-publishing.md` before release work.
-- Deployment smoke tests create/delete accounts and files; run only against a dedicated test installation. Details: `docs/contributing/deployment-checks.mdx`.
+- Build outputs: `apps/web/dist` (SPA assets), `apps/web/dist-prerender` (localized marketing HTML), and `apps/server/dist` (`index.mjs` plus chunks). `pnpm start` needs `NODE_ENV=production`, uses `PORT`, and does not load `.env.local`. Health endpoint: `/api/health`.
+- Deployment details live in the docs: Docker in `docs/self-hosting/docker.mdx`, Vercel Services and rewrites in `docs/self-hosting/vercel.mdx`, CI artifact and smoke checks in `docs/contributing/deployment-checks.mdx`, and image publishing in `docs/agents/container-publishing.md` (read it before release work).
 
 ## Security and pull requests
 
@@ -229,13 +196,11 @@ docker compose up -d --build
 - Keep unsafe OAuth redirect/AI URL flags disabled on public deployments. They relax redirect validation and SSRF protections for trusted self-hosted/test use.
 - Keep PRs focused. Describe the problem, resulting behavior, and checks actually run; link the relevant GitHub issue. Conventional Commits are enforced for commit messages; no separate PR-title convention is configured.
 - Before submitting, run applicable typechecks/tests and non-mutating lint checks; run the production build for runtime/bundling changes. Match CI's database/browser prerequisites when reproducing its checks. Report skipped checks and failures instead of claiming they passed.
-- Never add AI attribution, co-author trailers naming AI tools, or session/chat links to commits or PR descriptions.
 
 ## Gotchas
 
-- Email sending needs SMTP config; without it emails are logged to console. Dev still works — verification links appear in server logs.
-- Database connection errors: check `docker compose -f compose.dev.yml ps` and use `localhost` for host-run code, service names inside containers.
-- S3 errors: check `docker compose -f compose.dev.yml logs seaweedfs seaweedfs_create_bucket`; verify endpoint and bucket, or select local storage.
-- Route-tree errors after adding routes: run Vite dev/build to regenerate `apps/web/src/routeTree.gen.ts`; never edit it by hand.
-- Serverless module-loading failures: inspect `bundledInteropPackages` in `apps/server/tsdown.config.ts` and the Vercel compatibility workflow. External CommonJS server dependencies break on Vercel because its service builder drops their pnpm links; bundle them with their dependencies.
+- Without SMTP config, emails are logged to the server console; in dev, verification links appear there.
+- Database connection errors: check `docker compose -f compose.dev.yml ps`. Use `localhost` for host-run code and service names inside containers.
+- Route-tree errors: run Vite dev or build to regenerate `apps/web/src/routeTree.gen.ts`; never hand-edit it.
+- Serverless module-loading failures: see "When the loading check fails" in `docs/contributing/deployment-checks.mdx`.
 - Most test scripts use `--passWithNoTests`; a successful run with zero tests does not verify the behavior you changed.
