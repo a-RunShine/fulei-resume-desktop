@@ -195,6 +195,7 @@ docker compose up -d --build
 - Authenticated procedures use `protectedProcedure`; enforce resource ownership in feature logic. Reuse shared auth resolution for API keys, bearer tokens, and cookies rather than adding a separate auth path.
 - Keep unsafe OAuth redirect/AI URL flags disabled on public deployments. They relax redirect validation and SSRF protections for trusted self-hosted/test use.
 - Keep PRs focused. Describe the problem, resulting behavior, and checks actually run; link the relevant GitHub issue. Conventional Commits are enforced for commit messages; no separate PR-title convention is configured.
+- Write issues and PR titles/descriptions in Chinese where possible. Keep code identifiers, commands, file paths, and error messages in their original form.
 - Before submitting, run applicable typechecks/tests and non-mutating lint checks; run the production build for runtime/bundling changes. Match CI's database/browser prerequisites when reproducing its checks. Report skipped checks and failures instead of claiming they passed.
 
 ## Gotchas
