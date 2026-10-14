@@ -70,3 +70,6 @@ temp
 
 # Git Hooks
 .vite-hooks
+
+# PoC render outputs (local only)
+poc-out/
