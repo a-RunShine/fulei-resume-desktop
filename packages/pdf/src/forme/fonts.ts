@@ -62,15 +62,26 @@ function fetchFont(src: string, signal: AbortSignal): Promise<Response> {
 	});
 }
 
-const load = (src: string) => {
-	let bytes = cache.get(src);
+export type LocalFontReader = (request: PdfFontRequest) => Promise<Uint8Array | null>;
+
+const downloadFont = (src: string) =>
+	fetchFont(src, AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS))
+		.then((response) => response.arrayBuffer())
+		.then((buffer) => prepareFontBytes(new Uint8Array(buffer)));
+
+const localFont = async (request: PdfFontRequest, readLocal: LocalFontReader) => {
+	const bytes = await readLocal(request);
+	if (!bytes) throw new Error(`Font ${request.family} is not in the local cache.`);
+	return prepareFontBytes(bytes);
+};
+
+const load = (request: PdfFontRequest, readLocal?: LocalFontReader) => {
+	const key = readLocal ? `local:${request.family}:${request.weight}:${request.italic}` : request.src;
+	let bytes = cache.get(key);
 	if (!bytes) {
-		bytes = fetchFont(src, AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS))
-			.then((response) => response.arrayBuffer())
-			.then((buffer) => prepareFontBytes(new Uint8Array(buffer)));
-		// A failed download may succeed next time.
-		bytes.catch(() => cache.delete(src));
-		cache.set(src, bytes);
+		bytes = readLocal ? localFont(request, readLocal) : downloadFont(request.src);
+		bytes.catch(() => cache.delete(key));
+		cache.set(key, bytes);
 	}
 	return bytes;
 };
@@ -81,13 +92,19 @@ const load = (src: string) => {
  */
 export async function loadFonts(
 	requests: readonly PdfFontRequest[],
+	readLocal?: LocalFontReader,
 ): Promise<{ fonts: FormeFont[]; warnings: string[]; missing: string[] }> {
 	const warnings: string[] = [];
 	const missing: string[] = [];
 	const loaded = await Promise.all(
 		requests.map(async (request): Promise<FormeFont | null> => {
 			try {
-				return { family: request.family, weight: request.weight, italic: request.italic, src: await load(request.src) };
+				return {
+					family: request.family,
+					weight: request.weight,
+					italic: request.italic,
+					src: await load(request, readLocal),
+				};
 			} catch (error) {
 				warnings.push(error instanceof Error ? error.message : `Font ${request.src} could not be loaded.`);
 				missing.push(request.family);

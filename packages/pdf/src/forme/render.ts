@@ -17,7 +17,7 @@ import {
 	resumeUsesItalic,
 } from "../hooks/use-register-fonts";
 import { extractPageMap, NODE_CONTENT_PREFIX, NODE_SOURCE_PREFIX, parseResumeNodeKey } from "../page-map";
-import { loadFonts } from "./fonts";
+import { type LocalFontReader, loadFonts } from "./fonts";
 import { loadIcons } from "./icons";
 import { imageSources, loadImages } from "./images";
 import { renderHostTree } from "./reconciler";
@@ -37,6 +37,7 @@ export type RenderResumeInput = {
 	renderOptions?: ResumeRenderOptions | undefined;
 	resolveSectionTitle?: SectionTitleResolver | undefined;
 	readImage?: ((source: string) => Promise<Uint8Array>) | undefined;
+	readFont?: LocalFontReader | undefined;
 };
 
 export type RenderedResume = {
@@ -212,6 +213,7 @@ export function renderResume(engine: FormeEngine, input: RenderResumeInput): Pro
 			resolveSectionTitle: input.resolveSectionTitle,
 		}),
 		input.readImage,
+		input.readFont,
 	);
 }
 
@@ -223,10 +225,11 @@ export async function renderResumeElement(
 	engine: FormeEngine,
 	element: ReactElement,
 	readImage?: (source: string) => Promise<Uint8Array>,
+	readFont?: LocalFontReader,
 ): Promise<RenderedResume> {
 	const data = (element.props as { data?: ResumeData }).data;
 	// Font downloads start first: they're the largest wait, and the tree needs only the icons.
-	const fontsLoaded = loadFonts(data ? resumeFontRequests(data) : []);
+	const fontsLoaded = loadFonts(data ? resumeFontRequests(data) : [], readFont);
 	await loadIcons();
 	const tree = renderHostTree(element);
 	const [{ fonts, warnings: fontWarnings, missing }, { images, warnings: imageWarnings }] = await Promise.all([
