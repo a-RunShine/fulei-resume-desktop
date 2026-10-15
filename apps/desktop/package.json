@@ -1,0 +1,37 @@
+{
+	"name": "desktop",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "vite",
+		"build": "vite build",
+		"tauri": "tauri",
+		"typecheck": "tsgo --noEmit",
+		"test": "vitest run --passWithNoTests --exclude src/export-window.test.ts --exclude src/provider-window.test.ts",
+		"test:coverage": "vitest run --coverage --passWithNoTests --exclude src/export-window.test.ts --exclude src/provider-window.test.ts",
+		"test:ci": "vitest run --passWithNoTests --exclude src/export-window.test.ts --exclude src/provider-window.test.ts",
+		"test:agent": "vitest run --passWithNoTests --exclude src/export-window.test.ts --exclude src/provider-window.test.ts",
+		"test:window": "vitest run src/export-window.test.ts src/provider-window.test.ts"
+	},
+	"dependencies": {
+		"@reactive-resume/pdf": "workspace:*",
+		"@reactive-resume/schema": "workspace:*",
+		"@tauri-apps/api": "^2",
+		"react": "catalog:",
+		"react-dom": "^19.3.0"
+	},
+	"devDependencies": {
+		"@playwright/test": "^1.64.0",
+		"@reactive-resume/config": "workspace:*",
+		"@tauri-apps/cli": "^2",
+		"@types/react": "catalog:",
+		"@types/react-dom": "catalog:",
+		"@typescript/native-preview": "catalog:",
+		"@vitejs/plugin-react": "^6.1.2",
+		"pdfjs-dist": "6.4.299",
+		"typescript": "catalog:",
+		"vite": "^8.3.4",
+		"vitest": "catalog:"
+	}
+}

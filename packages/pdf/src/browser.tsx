@@ -7,6 +7,7 @@ import wasmUrl from "@formepdf/core/pkg-web/forme_bg.wasm?url";
 import * as forme from "@formepdf/core/worker";
 import subsetWasmUrl from "harfbuzzjs/dist/harfbuzz-subset.wasm?url";
 import { parseResumeData } from "@reactive-resume/schema/resume/data";
+import { readShippedFont } from "./forme/font-cache";
 import { createFontPreparer, createFontSubsetter } from "./forme/font-subset";
 import { loadFonts } from "./forme/fonts";
 import { assertPdfFonts, lostCharacters, renderResume, resumeFontRequests } from "./forme/render";
@@ -51,7 +52,7 @@ const loadEngine = () =>
 export const preloadResumePdf = (data: ResumeData) => {
 	loadEngine().catch(() => undefined);
 	void loadFontPreparer();
-	void loadFonts(resumeFontRequests(parseResumeData(data)));
+	void loadFonts(resumeFontRequests(parseResumeData(data)), readShippedFont);
 };
 
 export const createResumePdfBlob = async ({
@@ -71,7 +72,7 @@ export const createResumePdfBlob = async ({
 			},
 			prepareFont: async (bytes, text) => (await ready)[1](bytes, text),
 		},
-		{ ...input, data },
+		{ ...input, data, readFont: readShippedFont },
 	);
 	assertPdfFonts(result);
 	const { pdf, pageMap, warnings } = result;

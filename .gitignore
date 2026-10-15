@@ -70,3 +70,11 @@ temp
 
 # Git Hooks
 .vite-hooks
+
+# PoC render outputs (local only)
+poc-out/
+
+# Desktop shell build and prepared CJK faces (not shipped)
+apps/desktop/.cache
+apps/desktop/src-tauri/target
+apps/desktop/src-tauri/gen

@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>Reactive Resume</title>
+		<style>
+			body {
+				font-family: sans-serif;
+				margin: 2rem;
+			}
+			label {
+				display: block;
+				margin-bottom: 1rem;
+			}
+			input,
+			textarea {
+				display: block;
+				width: 100%;
+				margin-top: 0.25rem;
+				font: inherit;
+			}
+			textarea {
+				min-height: 8rem;
+			}
+			button {
+				font: inherit;
+				padding: 0.5rem 1rem;
+			}
+			#status,
+			#provider-status,
+			#reply {
+				margin-top: 1rem;
+			}
+			#editor:not([hidden]) {
+				display: flex;
+				gap: 1.5rem;
+				align-items: flex-start;
+			}
+			#editor-fields {
+				flex: 1 1 16rem;
+				min-width: 16rem;
+			}
+			#right-rail {
+				flex: 0 0 14rem;
+				width: 14rem;
+				max-height: calc(100vh - 4rem);
+				overflow: auto;
+			}
+			#resume-sheet {
+				position: relative;
+				background: white;
+				box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2);
+			}
+			#resume-canvas {
+				display: block;
+			}
+			#resume-text {
+				position: absolute;
+				inset: 0;
+				overflow: hidden;
+				line-height: 1;
+				text-size-adjust: none;
+				transform-origin: 0 0;
+			}
+			#resume-text span {
+				position: absolute;
+				color: transparent;
+				white-space: pre;
+				transform-origin: 0 0;
+			}
+			#sections {
+				display: flex;
+				flex-direction: column;
+				gap: 0.25rem;
+				width: 9rem;
+				margin-bottom: 1rem;
+			}
+			#sections button {
+				text-align: left;
+			}
+			#sections button[aria-pressed="true"] {
+				font-weight: 700;
+			}
+			#preview-column {
+				flex: 0 0 auto;
+			}
+			#page-controls {
+				display: flex;
+				gap: 0.5rem;
+				margin-top: 0.5rem;
+			}
+		</style>
+	</head>
+	<body>
+		<button type="button" id="new-resume">New Resume</button>
+		<ul id="resumes" aria-label="Resumes"></ul>
+		<section id="editor" hidden>
+			<button type="button" id="toggle-left">Toggle left sidebar</button>
+			<button type="button" id="toggle-right">Toggle right sidebar</button>
+			<div id="editor-fields">
+				<nav id="sections" aria-label="Sections">
+					<button type="button" data-section="picture" aria-pressed="false">Picture</button>
+					<button type="button" data-section="basics" aria-pressed="true">Basics</button>
+					<button type="button" data-section="summary" aria-pressed="false">Summary</button>
+					<button type="button" data-section="profiles" aria-pressed="false">Profiles</button>
+					<button type="button" data-section="experience" aria-pressed="false">Experience</button>
+					<button type="button" data-section="education" aria-pressed="false">Education</button>
+				</nav>
+				<section id="section-picture" aria-label="Picture" hidden>
+					<label>
+						Picture URL
+						<input id="picture-url" name="pictureUrl" />
+					</label>
+					<label>
+						Show picture
+						<input id="picture-visible" name="pictureVisible" type="checkbox" />
+					</label>
+				</section>
+				<section id="section-basics" aria-label="Basics">
+					<label>
+						Name
+						<input id="basics-name" name="name" autocomplete="name" />
+					</label>
+				</section>
+				<section id="section-summary" aria-label="Summary" hidden>
+					<label>
+						Summary
+						<textarea id="summary" name="summary"></textarea>
+					</label>
+				</section>
+				<section id="section-profiles" aria-label="Profiles" hidden>
+					<button type="button" id="add-profile">Add Item</button>
+					<div id="profile-item" hidden>
+						<label>
+							Network
+							<input id="network" name="network" />
+						</label>
+					</div>
+				</section>
+				<section id="section-experience" aria-label="Experience" hidden>
+					<button type="button" id="add-item">Add Item</button>
+					<div id="experience-item" hidden>
+						<label>
+							Company
+							<input id="company" name="company" />
+						</label>
+						<label>
+							Position
+							<input id="position" name="position" />
+						</label>
+						<button type="button" id="remove-item">Remove Item</button>
+					</div>
+				</section>
+				<section id="section-education" aria-label="Education" hidden>
+					<button type="button" id="add-education">Add Item</button>
+					<div id="education-item" hidden>
+						<label>
+							School
+							<input id="school" name="school" />
+						</label>
+					</div>
+				</section>
+				<label>
+					Title
+					<input id="title" name="title" />
+				</label>
+				<button type="button" id="delete-resume">Delete</button>
+				<label>
+					Paper
+					<select id="paper">
+						<option value="a4">A4</option>
+						<option value="letter">Letter</option>
+					</select>
+				</label>
+				<label>
+					Skill
+					<input id="skill" name="skill" />
+				</label>
+				<button type="button" id="export-pdf">Export PDF</button>
+				<p id="persist" role="status"></p>
+			</div>
+			<div id="preview-column">
+				<section id="resume-page" aria-label="Page" hidden>
+					<div id="resume-sheet">
+						<canvas id="resume-canvas"></canvas>
+						<div id="resume-text"></div>
+					</div>
+				</section>
+				<div id="page-controls">
+					<button type="button" id="previous-page">Previous page</button>
+					<p id="page-status"></p>
+					<button type="button" id="next-page">Next page</button>
+				</div>
+			</div>
+			<aside id="right-rail" aria-label="Settings">
+				<h2 id="template-current"></h2>
+				<img id="template-thumb" alt="" width="72" height="96" />
+				<label>
+					<input id="filter-single" type="checkbox" />
+					Single-column
+				</label>
+				<label>
+					<input id="filter-ats" type="checkbox" />
+					ATS friendly
+				</label>
+				<label>
+					Template
+					<select id="template"></select>
+				</label>
+				<section aria-label="Layout">
+					<h2>Layout</h2>
+					<div id="layout-pages"></div>
+					<button type="button" id="add-page">Add Page</button>
+					<label>
+						Sidebar Width
+						<input id="sidebar-width" type="range" min="10" max="50" step="1" />
+					</label>
+				</section>
+			</aside>
+		</section>
+		<form id="provider">
+			<label>
+				Provider
+				<input name="baseUrl" autocomplete="off" />
+			</label>
+			<label>
+				Model
+				<input name="model" autocomplete="off" />
+			</label>
+			<label>
+				API key
+				<input name="apiKey" type="password" autocomplete="off" />
+			</label>
+			<button type="submit">Save Provider</button>
+		</form>
+		<p id="provider-status"></p>
+		<button id="ask" type="button">Ask Assistant</button>
+		<p id="reply"></p>
+		<p id="status" role="status"></p>
+		<script type="module" src="/src/main.ts"></script>
+	</body>
+</html>
