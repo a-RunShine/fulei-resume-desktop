@@ -187,6 +187,7 @@ docker compose up -d --build
 ```
 
 - Build outputs: `apps/web/dist` (SPA assets), `apps/web/dist-prerender` (localized marketing HTML), and `apps/server/dist` (`index.mjs` plus chunks). `pnpm start` needs `NODE_ENV=production`, uses `PORT`, and does not load `.env.local`. Health endpoint: `/api/health`.
+- Ship a desktop release with `node apps/desktop/scripts/pack-portable.mjs`. The result is `apps/desktop/portable/Reactive Resume.exe`: one file containing Node, the Hono server, `apps/web/dist`, and the WebView2 Fixed Version runtime. The WebView2 cab stays in `apps/desktop/.cache` and is not committed. First launch extracts that runtime to `%LOCALAPPDATA%\Reactive Resume\runtime\<version>`; resumes stay in `%LOCALAPPDATA%\Reactive Resume\data`.
 - Deployment details live in the docs: Docker in `docs/self-hosting/docker.mdx`, Vercel Services and rewrites in `docs/self-hosting/vercel.mdx`, CI artifact and smoke checks in `docs/contributing/deployment-checks.mdx`, and image publishing in `docs/agents/container-publishing.md` (read it before release work).
 
 ## Security and pull requests

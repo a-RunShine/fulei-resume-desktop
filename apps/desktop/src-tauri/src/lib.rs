@@ -402,6 +402,24 @@ fn browser_args() -> Option<String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let runtime = match prepare_runtime() {
+        Ok(runtime) => runtime,
+        Err(error) => fail(&error),
+    };
+    std::env::set_var("WEBVIEW2_BROWSER_EXECUTABLE_FOLDER", &runtime.webview2);
+    if port_busy() {
+        fail(&format!("port {} is already in use", local_api::PORT));
+    }
+    let pid = match spawn_server(&runtime) {
+        Ok(pid) => pid,
+        Err(error) => fail(&error),
+    };
+    if let Err(error) = wait_until_healthy() {
+        let _ = command_without_window("taskkill")
+            .args(["/pid", &pid.to_string(), "/T", "/F"])
+            .status();
+        fail(&error);
+    }
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             save_resume_pdf,
@@ -416,47 +434,15 @@ pub fn run() {
             ask_assistant
         ])
         .register_uri_scheme_protocol("fontcache", |_ctx, request| read_prepared_font(&request))
-		.setup(|app| {
-			let _ = app;
-			let data_directory = local_api::database_file()
-				.parent()
-				.map(std::path::Path::to_path_buf)
-				.unwrap_or_else(|| std::path::PathBuf::from("desktop-data"));
-			std::fs::create_dir_all(&data_directory).ok();
-			let mut path = std::env::var("PATH").unwrap_or_default();
-			path = format!(r"C:\Program Files\nodejs;C:\Users\Administrator\AppData\Roaming\npm;{path}");
-			let workspace = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-			let server = command_without_window("cmd")
-				.current_dir(&workspace)
-				.env("PATH", path)
-				.env("DESKTOP_DATA_DIR", &data_directory)
-				.env("DESKTOP_SQLITE", data_directory.join("resumes.sqlite"))
-				.env("PORT", local_api::PORT.to_string())
-				.args(["/c", "pnpm", "--filter", "server", "exec", "tsx", "src/desktop-host.ts"])
-				.spawn()
-				.expect("start the v6 server");
-			app.manage(ServerPid(server.id()));
-			let mut healthy = false;
-			for _ in 0..120 {
-				if ureq::get(&format!("http://127.0.0.1:{}/api/health", local_api::PORT))
-					.call()
-					.is_ok()
-				{
-					healthy = true;
-					break;
-				}
-				std::thread::sleep(std::time::Duration::from_millis(500));
-			}
-			if !healthy {
-				panic!("desktop server did not become healthy");
-			}
-			let url = format!("http://127.0.0.1:{}/desktop/enter", local_api::PORT)
-				.parse()
-				.expect("local url");
-			let mut builder = tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::External(url))
-            .title("Reactive Resume")
-            .inner_size(1440.0, 900.0)
-            .resizable(true);
+        .setup(move |app| {
+            app.manage(ServerPid(pid));
+            let url = format!("http://127.0.0.1:{}/desktop/enter", local_api::PORT)
+                .parse()
+                .expect("local url");
+            let mut builder = tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::External(url))
+                .title("Reactive Resume")
+                .inner_size(1440.0, 900.0)
+                .resizable(true);
             if let Some(args) = browser_args() {
                 builder = builder.additional_browser_args(&args);
             }
@@ -474,6 +460,281 @@ pub fn run() {
                 }
             }
         });
+}
+
+fn fail(message: &str) -> ! {
+    if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+        let directory = std::path::PathBuf::from(local_app_data).join("Reactive Resume");
+        let _ = std::fs::create_dir_all(&directory);
+        let _ = std::fs::write(directory.join("boot.log"), message);
+    }
+    panic!("{message}");
+}
+
+struct RuntimeLayout {
+    root: std::path::PathBuf,
+    data_dir: std::path::PathBuf,
+    webview2: std::path::PathBuf,
+}
+
+const TRAILER_LEN: u64 = 80;
+const TRAILER_MAGIC: &[u8; 16] = b"RRPORTABLE!!!!!\n";
+
+fn prepare_runtime() -> Result<RuntimeLayout, String> {
+    let executable = std::env::current_exe().map_err(|error| error.to_string())?;
+    let local_app_data = std::env::var("LOCALAPPDATA").map_err(|_| "LOCALAPPDATA is not set".to_string())?;
+    let base = std::path::PathBuf::from(local_app_data).join("Reactive Resume");
+    let data_dir = base.join("data");
+    std::fs::create_dir_all(&data_dir).map_err(|error| error.to_string())?;
+    let (version, zip_len) = read_trailer(&executable)?;
+    let root = base.join("runtime").join(&version);
+    let marker = root.join(".complete");
+    if !marker.is_file() {
+        if root.exists() {
+            std::fs::remove_dir_all(extended_path(&root)).map_err(|error| error.to_string())?;
+        }
+        eprintln!("extracting portable runtime");
+        extract_payload(&executable, zip_len, &root)?;
+        std::fs::write(&marker, &version).map_err(|error| error.to_string())?;
+    }
+    let webview = find_named(&root.join("webview2"), "msedgewebview2.exe")
+        .ok_or_else(|| "bundled WebView2 is missing".to_string())?;
+    let webview2 = webview
+        .parent()
+        .ok_or_else(|| "WebView2 folder is missing".to_string())?
+        .to_path_buf();
+    grant_webview_permissions(&webview2)?;
+    Ok(RuntimeLayout {
+        root,
+        data_dir,
+        webview2,
+    })
+}
+
+fn read_trailer(executable: &std::path::Path) -> Result<(String, u64), String> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut file = std::fs::File::open(executable).map_err(|error| error.to_string())?;
+    let length = file.metadata().map_err(|error| error.to_string())?.len();
+    if length < TRAILER_LEN {
+        return Err("this executable has no portable runtime".to_string());
+    }
+    file.seek(SeekFrom::End(-(TRAILER_LEN as i64)))
+        .map_err(|error| error.to_string())?;
+    let mut trailer = [0_u8; TRAILER_LEN as usize];
+    file.read_exact(&mut trailer).map_err(|error| error.to_string())?;
+    if trailer[0..16] != TRAILER_MAGIC[..] {
+        return Err("this executable has no portable runtime".to_string());
+    }
+    let mut zip_len_bytes = [0_u8; 8];
+    zip_len_bytes.copy_from_slice(&trailer[16..24]);
+    let zip_len = u64::from_le_bytes(zip_len_bytes);
+    if zip_len == 0 || zip_len + TRAILER_LEN > length {
+        return Err("portable runtime trailer is invalid".to_string());
+    }
+    let version_end = trailer[24..]
+        .iter()
+        .position(|byte| *byte == 0)
+        .map(|index| 24 + index)
+        .unwrap_or(TRAILER_LEN as usize);
+    let version = std::str::from_utf8(&trailer[24..version_end]).map_err(|error| error.to_string())?;
+    if version.is_empty() || !version.chars().all(|character| character.is_ascii_alphanumeric()) {
+        return Err("portable runtime version is invalid".to_string());
+    }
+    Ok((version.to_string(), zip_len))
+}
+
+struct FileRange {
+    file: std::fs::File,
+    start: u64,
+    len: u64,
+    pos: u64,
+}
+
+impl std::io::Read for FileRange {
+    fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+        use std::io::{Read, Seek, SeekFrom};
+        if self.pos >= self.len {
+            return Ok(0);
+        }
+        let available = std::cmp::min(buffer.len() as u64, self.len - self.pos) as usize;
+        self.file.seek(SeekFrom::Start(self.start + self.pos))?;
+        let read = self.file.read(&mut buffer[..available])?;
+        self.pos += read as u64;
+        Ok(read)
+    }
+}
+
+impl std::io::Seek for FileRange {
+    fn seek(&mut self, position: std::io::SeekFrom) -> std::io::Result<u64> {
+        let next = match position {
+            std::io::SeekFrom::Start(offset) => offset as i64,
+            std::io::SeekFrom::End(offset) => self.len as i64 + offset,
+            std::io::SeekFrom::Current(offset) => self.pos as i64 + offset,
+        };
+        if next < 0 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "seek before the start of the portable runtime",
+            ));
+        }
+        self.pos = next as u64;
+        Ok(self.pos)
+    }
+}
+
+fn extract_payload(executable: &std::path::Path, zip_len: u64, destination: &std::path::Path) -> Result<(), String> {
+    let file = std::fs::File::open(executable).map_err(|error| error.to_string())?;
+    let length = file.metadata().map_err(|error| error.to_string())?.len();
+    let start = length - TRAILER_LEN - zip_len;
+    let range = FileRange {
+        file,
+        start,
+        len: zip_len,
+        pos: 0,
+    };
+    let mut archive = zip::ZipArchive::new(range).map_err(|error| error.to_string())?;
+    std::fs::create_dir_all(extended_path(destination)).map_err(|error| error.to_string())?;
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index).map_err(|error| error.to_string())?;
+        let relative = safe_zip_path(entry.name())?;
+        let Some(relative) = relative else {
+            continue;
+        };
+        let path = destination.join(relative);
+        let target = extended_path(&path);
+        if entry.is_dir() {
+            std::fs::create_dir_all(&target).map_err(|error| error.to_string())?;
+            continue;
+        }
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+        }
+        let mut output = std::fs::File::create(&target).map_err(|error| error.to_string())?;
+        std::io::copy(&mut entry, &mut output).map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
+fn safe_zip_path(name: &str) -> Result<Option<std::path::PathBuf>, String> {
+    let mut normalized = name.replace('\\', "/");
+    while normalized.starts_with("./") {
+        normalized = normalized[2..].to_string();
+    }
+    if normalized == "." || normalized.is_empty() {
+        return Ok(None);
+    }
+    if normalized.starts_with('/') || normalized.split('/').any(|part| part == "..") {
+        return Err(format!("unsafe zip entry {name}"));
+    }
+    Ok(Some(std::path::PathBuf::from(normalized)))
+}
+
+fn extended_path(path: &std::path::Path) -> std::path::PathBuf {
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir().unwrap_or_default().join(path)
+    };
+    let text = absolute.to_string_lossy().replace('/', "\\");
+    if text.starts_with(r"\\?\") {
+        return std::path::PathBuf::from(text.as_str());
+    }
+    std::path::PathBuf::from(format!(r"\\?\{text}"))
+}
+
+fn find_named(directory: &std::path::Path, file_name: &str) -> Option<std::path::PathBuf> {
+    let mut pending = vec![directory.to_path_buf()];
+    while let Some(current) = pending.pop() {
+        let entries = match std::fs::read_dir(&current) {
+            Ok(entries) => entries,
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                pending.push(path);
+                continue;
+            }
+            if path.file_name().and_then(|name| name.to_str()) == Some(file_name) {
+                return Some(path);
+            }
+        }
+    }
+    None
+}
+
+fn grant_webview_permissions(folder: &std::path::Path) -> Result<(), String> {
+    for sid in ["*S-1-15-2-2:(OI)(CI)(RX)", "*S-1-15-2-1:(OI)(CI)(RX)"] {
+        let status = command_without_window("icacls")
+            .arg(folder)
+            .arg("/grant")
+            .arg(sid)
+            .status()
+            .map_err(|error| error.to_string())?;
+        if !status.success() {
+            return Err("could not grant WebView2 permissions".to_string());
+        }
+    }
+    Ok(())
+}
+
+fn spawn_server(runtime: &RuntimeLayout) -> Result<u32, String> {
+    let node = runtime.root.join("node").join("node.exe");
+    let server_dir = runtime.root.join("server");
+    let script = server_dir.join("desktop-host.mjs");
+    if !node.is_file() {
+        return Err(format!("bundled node is missing: {}", node.display()));
+    }
+    if !script.is_file() {
+        return Err(format!("desktop server is missing: {}", script.display()));
+    }
+    let node_path = node.to_str().ok_or_else(|| "bundled node path is not unicode".to_string())?;
+    let mut command = command_without_window(node_path);
+    command
+        .current_dir(&server_dir)
+        .arg(&script)
+        .env("DESKTOP_DATA_DIR", &runtime.data_dir)
+        .env("DESKTOP_WEB_DIST", runtime.root.join("web").join("dist"))
+        .env("PORT", local_api::PORT.to_string());
+    if let Ok(executable) = std::env::current_exe() {
+        if let Some(directory) = executable.parent() {
+            let sqlite = directory.join("desktop-data").join("resumes.sqlite");
+            if sqlite.is_file() {
+                command.env("DESKTOP_SQLITE", sqlite);
+            }
+        }
+    }
+    let child = command.spawn().map_err(|error| error.to_string())?;
+    let pid = child.id();
+    std::mem::forget(child);
+    Ok(pid)
+}
+
+fn health_agent() -> ureq::Agent {
+    ureq::AgentBuilder::new()
+        .timeout(std::time::Duration::from_secs(2))
+        .build()
+}
+
+fn port_busy() -> bool {
+    health_agent()
+        .get(&format!("http://127.0.0.1:{}/api/health", local_api::PORT))
+        .call()
+        .is_ok()
+}
+
+fn wait_until_healthy() -> Result<(), String> {
+    for _ in 0..180 {
+        if health_agent()
+            .get(&format!("http://127.0.0.1:{}/api/health", local_api::PORT))
+            .call()
+            .is_ok()
+        {
+            return Ok(());
+        }
+        std::thread::sleep(std::time::Duration::from_secs(1));
+    }
+    Err("desktop server did not become healthy".to_string())
 }
 
 struct ServerPid(u32);
