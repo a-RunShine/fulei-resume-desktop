@@ -3,6 +3,8 @@ use std::borrow::Cow;
 use serde::Serialize;
 use tauri::Manager;
 
+mod local_api;
+
 #[derive(Serialize)]
 struct ResumeListItem {
     id: String,
@@ -414,14 +416,46 @@ pub fn run() {
             ask_assistant
         ])
         .register_uri_scheme_protocol("fontcache", |_ctx, request| read_prepared_font(&request))
-        .setup(|app| {
-            let mut builder = tauri::WebviewWindowBuilder::new(
-                app,
-                "main",
-                tauri::WebviewUrl::App("index.html".into()),
-            )
+		.setup(|app| {
+			let _ = app;
+			let data_directory = local_api::database_file()
+				.parent()
+				.map(std::path::Path::to_path_buf)
+				.unwrap_or_else(|| std::path::PathBuf::from("desktop-data"));
+			std::fs::create_dir_all(&data_directory).ok();
+			let mut path = std::env::var("PATH").unwrap_or_default();
+			path = format!(r"C:\Program Files\nodejs;C:\Users\Administrator\AppData\Roaming\npm;{path}");
+			let workspace = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+			let server = command_without_window("cmd")
+				.current_dir(&workspace)
+				.env("PATH", path)
+				.env("DESKTOP_DATA_DIR", &data_directory)
+				.env("DESKTOP_SQLITE", data_directory.join("resumes.sqlite"))
+				.env("PORT", local_api::PORT.to_string())
+				.args(["/c", "pnpm", "--filter", "server", "exec", "tsx", "src/desktop-host.ts"])
+				.spawn()
+				.expect("start the v6 server");
+			app.manage(ServerPid(server.id()));
+			let mut healthy = false;
+			for _ in 0..120 {
+				if ureq::get(&format!("http://127.0.0.1:{}/api/health", local_api::PORT))
+					.call()
+					.is_ok()
+				{
+					healthy = true;
+					break;
+				}
+				std::thread::sleep(std::time::Duration::from_millis(500));
+			}
+			if !healthy {
+				panic!("desktop server did not become healthy");
+			}
+			let url = format!("http://127.0.0.1:{}/desktop/enter", local_api::PORT)
+				.parse()
+				.expect("local url");
+			let mut builder = tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::External(url))
             .title("Reactive Resume")
-            .inner_size(900.0, 980.0)
+            .inner_size(1440.0, 900.0)
             .resizable(true);
             if let Some(args) = browser_args() {
                 builder = builder.additional_browser_args(&args);
@@ -429,6 +463,27 @@ pub fn run() {
             builder.build()?;
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                if let Some(pid) = app.try_state::<ServerPid>() {
+                    let _ = command_without_window("taskkill")
+                        .args(["/pid", &pid.0.to_string(), "/T", "/F"])
+                        .status();
+                }
+            }
+        });
+}
+
+struct ServerPid(u32);
+
+fn command_without_window(program: &str) -> std::process::Command {
+	let mut command = std::process::Command::new(program);
+	#[cfg(windows)]
+	{
+		use std::os::windows::process::CommandExt;
+		command.creation_flags(0x08000000);
+	}
+	command
 }

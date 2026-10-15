@@ -26,6 +26,7 @@ import { handleUpload } from "../static/uploads";
 import { handleWebApp, serveWebDistStatic } from "../static/web";
 import { handleAuth, handleOAuth } from "./auth";
 import { handleCareerJobs } from "./career-jobs";
+import { handleDesktopEnter } from "./desktop-enter";
 import { handleHealth } from "./health";
 import { handlePublicResumePdf } from "./public-resume-pdf";
 import { handleResumePdfDownload } from "./resume-pdf";
@@ -96,6 +97,7 @@ export function createApp(options: AppOptions = {}) {
 	app.all("/api/rpc/*", (c) => withStagedBody(c.req.raw, (request) => handleRpc(request, client(c))));
 	app.all("/api/openapi", (c) => handleOpenApi(c.req.raw, client(c)));
 	app.all("/api/openapi/*", (c) => handleOpenApi(c.req.raw, client(c)));
+	app.get("/desktop/enter", (c) => handleDesktopEnter(c.req.raw));
 	app.get("/api/auth/oauth", (c) => handleOAuth(c.req.raw));
 	app.all("/api/auth/*", (c) => handleAuth(c.req.raw, client(c)));
 	app.get("/api/health", () => handleHealth());

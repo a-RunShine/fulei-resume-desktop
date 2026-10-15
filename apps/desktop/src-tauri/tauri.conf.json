@@ -4,18 +4,21 @@
 	"version": "0.1.0",
 	"identifier": "dev.reactivresume.desktop",
 	"build": {
-		"beforeDevCommand": "pnpm dev",
-		"devUrl": "http://127.0.0.1:1420",
-		"beforeBuildCommand": "pnpm build",
-		"frontendDist": "../dist"
+		"beforeDevCommand": "node -e \"process.exit(0)\"",
+		"devUrl": "http://127.0.0.1:47821",
+		"beforeBuildCommand": "pnpm --dir ../web build",
+		"frontendDist": "../../web/dist"
 	},
 	"app": {
 		"windows": [],
 		"security": {
-			"csp": "default-src 'self' 'unsafe-inline' 'unsafe-eval' blob: data: ipc: http://ipc.localhost http://127.0.0.1:1420 http://localhost:1420 http://fontcache.localhost; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:1420 http://localhost:1420 http://fontcache.localhost ws://127.0.0.1:1420 ws://localhost:1420; img-src 'self' blob: data:; worker-src 'self' blob:; font-src 'self' http://fontcache.localhost"
+			"csp": null
 		}
 	},
 	"bundle": {
-		"active": false
+		"active": true,
+		"resources": {
+			"../../web/dist": "web/"
+		}
 	}
 }
