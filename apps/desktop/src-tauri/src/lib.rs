@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 
 use portable::{BrowserHost, Clock, PortableBoot, ProcessHost, ServerLaunch, StartupSurface};
 use serde::Serialize;
@@ -587,6 +587,7 @@ impl ProcessHost for SystemProcess {
 struct GuiSurface {
     app: tauri::AppHandle,
     window: Arc<Mutex<Option<tauri::WebviewWindow>>>,
+    ready: Arc<(Mutex<bool>, Condvar)>,
     shown: bool,
 }
 
@@ -595,7 +596,16 @@ impl GuiSurface {
         Self {
             app,
             window: Arc::new(Mutex::new(None)),
+            ready: Arc::new((Mutex::new(false), Condvar::new())),
             shown: false,
+        }
+    }
+
+    fn wait_until_window_exists(&self) {
+        let (lock, condition) = &*self.ready;
+        let mut built = lock.lock().expect("window ready");
+        while !*built {
+            built = condition.wait(built).expect("window ready");
         }
     }
 }
@@ -607,6 +617,7 @@ impl StartupSurface for GuiSurface {
             self.shown = true;
             let app = self.app.clone();
             let window = Arc::clone(&self.window);
+            let ready = Arc::clone(&self.ready);
             let queued = self.app.run_on_main_thread(move || {
                 let parsed = startup_data_url(&status).parse().expect("startup url");
                 let mut builder = tauri::WebviewWindowBuilder::new(
@@ -621,13 +632,19 @@ impl StartupSurface for GuiSurface {
                     builder = builder.additional_browser_args(&args);
                 }
                 match builder.build() {
-                    Ok(created) => *window.lock().expect("window") = Some(created),
+                    Ok(created) => {
+                        *window.lock().expect("window") = Some(created);
+                        let (lock, condition) = &*ready;
+                        *lock.lock().expect("window ready") = true;
+                        condition.notify_one();
+                    }
                     Err(error) => fail(&error.to_string()),
                 }
             });
             if let Err(error) = queued {
                 fail(&error.to_string());
             }
+            self.wait_until_window_exists();
             return;
         }
         let window = Arc::clone(&self.window);
@@ -687,7 +704,7 @@ fn fail(message: &str) -> ! {
         let _ = std::fs::create_dir_all(&directory);
         let _ = std::fs::write(directory.join("boot.log"), message);
     }
-    panic!("{message}");
+    std::process::exit(1);
 }
 
 fn command_without_window(program: &str) -> std::process::Command {

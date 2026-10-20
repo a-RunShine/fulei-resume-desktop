@@ -65,8 +65,8 @@ fn start_portable(boot: &mut PortableBoot<'_>) -> Result<(), String> {
     }
     let manifest = read_component_manifest(boot.executable, zip_len)?;
     let runtime = boot.app_data.join("runtime");
-    prepare_browser(boot, zip_len, &manifest.webview2, &runtime)?;
     boot.surface.show_local("Preparing the runtime");
+    prepare_browser(boot, zip_len, &manifest.webview2, &runtime)?;
     install_component(
         boot.executable,
         zip_len,
@@ -241,7 +241,10 @@ fn install_component(
     missing: &str,
 ) -> Result<(), String> {
     if let Ok(stored) = std::fs::read_to_string(destination.join(".complete")) {
-        if stored.trim() == hash && ready(destination) {
+        if stored.trim() == hash
+            && ready(destination)
+            && component_files_present(executable, zip_len, name, destination)
+        {
             return Ok(());
         }
     }
@@ -253,6 +256,40 @@ fn install_component(
         return Err(missing.to_string());
     }
     std::fs::write(destination.join(".complete"), hash).map_err(|error| error.to_string())
+}
+
+fn component_files_present(
+    executable: &Path,
+    zip_len: u64,
+    name: &str,
+    destination: &Path,
+) -> bool {
+    let Ok(range) = open_range(executable, zip_len) else {
+        return false;
+    };
+    let Ok(mut archive) = zip::ZipArchive::new(range) else {
+        return false;
+    };
+    let prefix = format!("{name}/");
+    for index in 0..archive.len() {
+        let Ok(entry) = archive.by_index(index) else {
+            return false;
+        };
+        let entry_name = entry.name().replace('\\', "/");
+        let Some(relative) = entry_name.strip_prefix(&prefix) else {
+            continue;
+        };
+        if relative.is_empty() || entry.is_dir() {
+            continue;
+        }
+        let Ok(Some(relative_path)) = safe_zip_path(relative) else {
+            return false;
+        };
+        if !destination.join(relative_path).is_file() {
+            return false;
+        }
+    }
+    true
 }
 
 fn find_named(directory: &Path, file_name: &str) -> Option<PathBuf> {
@@ -995,6 +1032,14 @@ mod tests {
             std::fs::read(node.join(".complete")).unwrap(),
             b"node-hash-1"
         );
+
+        let mut payload = standard_payload();
+        payload.push(("node/license.txt", b"license"));
+        write_portable(&fixture.exe(), &payload);
+        boot_once(&fixture, free_port(), true, 0).expect("payload with license");
+        std::fs::remove_file(node.join("license.txt")).unwrap();
+        boot_once(&fixture, free_port(), true, 0).expect("missing license");
+        assert_eq!(std::fs::read(node.join("license.txt")).unwrap(), b"license");
     }
 
     #[test]
