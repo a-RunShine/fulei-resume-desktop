@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const desktopDir = path.join(repoRoot, "apps", "desktop");
@@ -106,6 +106,115 @@ function importedPackages(directory) {
 	return names;
 }
 
+const namedExternalPackages = new Set(["@electric-sql/pglite", "sharp"]);
+
+function containsRuntimeAsset(directory) {
+	const pending = [directory];
+	while (pending.length > 0) {
+		const current = pending.pop();
+		for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+			if (entry.name === "node_modules") continue;
+			const entryPath = path.join(current, entry.name);
+			if (entry.isDirectory()) pending.push(entryPath);
+			else if (entry.name.endsWith(".wasm") || entry.name.endsWith(".node")) return true;
+		}
+	}
+	return false;
+}
+
+function shipsExternally(name, directory) {
+	return namedExternalPackages.has(name) || name.startsWith("@img/") || containsRuntimeAsset(directory);
+}
+
+function externalPackageNames(modulesDir) {
+	if (!fs.existsSync(modulesDir)) return [];
+	const names = [];
+	for (const entry of fs.readdirSync(modulesDir, { withFileTypes: true })) {
+		if (!entry.isDirectory() || entry.name === ".bin") continue;
+		if (entry.name.startsWith("@")) {
+			const scopeDir = path.join(modulesDir, entry.name);
+			for (const child of fs.readdirSync(scopeDir, { withFileTypes: true })) {
+				if (!child.isDirectory()) continue;
+				const name = `${entry.name}/${child.name}`;
+				if (shipsExternally(name, path.join(scopeDir, child.name))) names.push(name);
+			}
+			continue;
+		}
+		if (shipsExternally(entry.name, path.join(modulesDir, entry.name))) names.push(entry.name);
+	}
+	return names;
+}
+
+export function stageNodeExecutable(source, destination) {
+	fs.rmSync(destination, { recursive: true, force: true });
+	fs.mkdirSync(destination, { recursive: true });
+	for (const name of ["node.exe", "node"]) {
+		const from = path.join(source, name);
+		if (fs.existsSync(from) && fs.statSync(from).isFile()) fs.copyFileSync(from, path.join(destination, name));
+	}
+}
+
+export function stageWebApp(distDir, prerenderDir, destination) {
+	fs.rmSync(destination, { recursive: true, force: true });
+	fs.mkdirSync(destination, { recursive: true });
+	fs.cpSync(distDir, path.join(destination, "dist"), { recursive: true, dereference: true });
+	if (fs.existsSync(prerenderDir))
+		fs.rmSync(path.join(destination, "dist-prerender"), { recursive: true, force: true });
+}
+
+export function stageServer({ bundleDir, modulesDir, migrationsDir, destination }) {
+	fs.rmSync(destination, { recursive: true, force: true });
+	fs.mkdirSync(destination, { recursive: true });
+	copyChildren(bundleDir, destination);
+	copyChildren(migrationsDir, path.join(destination, "migrations"));
+	fs.writeFileSync(
+		path.join(destination, "package.json"),
+		JSON.stringify({ name: "reactive-resume-desktop-server", private: true, type: "module" }),
+	);
+	for (const name of externalPackageNames(modulesDir)) {
+		const from = path.join(modulesDir, ...name.split("/"));
+		const to = path.join(destination, "node_modules", ...name.split("/"));
+		fs.mkdirSync(path.dirname(to), { recursive: true });
+		fs.cpSync(from, to, { recursive: true, dereference: true });
+	}
+}
+
+function hashDirectory(directory) {
+	const hash = createHash("sha256");
+	const files = [];
+	const pending = [directory];
+	while (pending.length > 0) {
+		const current = pending.pop();
+		if (!fs.existsSync(current)) continue;
+		for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+			const entryPath = path.join(current, entry.name);
+			if (entry.isDirectory()) pending.push(entryPath);
+			else files.push(entryPath);
+		}
+	}
+	files.sort();
+	for (const file of files) {
+		hash.update(path.relative(directory, file).replaceAll("\\", "/"));
+		hash.update("\0");
+		hash.update(fs.readFileSync(file));
+		hash.update("\0");
+	}
+	return hash.digest("hex");
+}
+
+export function componentHashes(stagingDir) {
+	return {
+		node: hashDirectory(path.join(stagingDir, "node")),
+		server: hashDirectory(path.join(stagingDir, "server")),
+		web: hashDirectory(path.join(stagingDir, "web")),
+		webview2: hashDirectory(path.join(stagingDir, "webview2")),
+	};
+}
+
+function writeComponentManifest(stagingDir) {
+	fs.writeFileSync(path.join(stagingDir, "manifest.json"), JSON.stringify(componentHashes(stagingDir)));
+}
+
 async function download(url, destination) {
 	if (fs.existsSync(destination) && fs.statSync(destination).size > 1_000_000) return;
 	fs.mkdirSync(path.dirname(destination), { recursive: true });
@@ -142,47 +251,29 @@ async function main() {
 		})(),
 	]);
 
-	fs.rmSync(serverDir, { recursive: true, force: true });
-	fs.mkdirSync(serverDir, { recursive: true });
-	fs.cpSync(path.join(deployDir, "node_modules"), path.join(serverDir, "node_modules"), {
-		recursive: true,
-		dereference: true,
+	stageServer({
+		bundleDir: path.join(repoRoot, "apps", "server", "dist"),
+		modulesDir: path.join(deployDir, "node_modules"),
+		migrationsDir: path.join(repoRoot, "migrations"),
+		destination: serverDir,
 	});
-	fs.writeFileSync(
-		path.join(serverDir, "package.json"),
-		JSON.stringify({ name: "reactive-resume-desktop-server", private: true, type: "module" }),
-	);
-	copyChildren(path.join(repoRoot, "apps", "server", "dist"), serverDir);
-	copyChildren(path.join(repoRoot, "migrations"), path.join(serverDir, "migrations"));
 	const missing = [...importedPackages(serverDir)].filter(
 		(name) => !fs.existsSync(path.join(serverDir, "node_modules", name)),
 	);
 	if (missing.length > 0) throw new Error(`portable server is missing packages: ${missing.sort().join(", ")}`);
 
-	const nodeSource = path.dirname(process.execPath);
-	const nodeDestination = path.join(stagingDir, "node");
-	fs.rmSync(nodeDestination, { recursive: true, force: true });
-	fs.mkdirSync(nodeDestination, { recursive: true });
-	for (const entry of fs.readdirSync(nodeSource, { withFileTypes: true })) {
-		if (!entry.isFile()) continue;
-		fs.copyFileSync(path.join(nodeSource, entry.name), path.join(nodeDestination, entry.name));
-	}
-
-	const webDestination = path.join(stagingDir, "web");
-	fs.rmSync(webDestination, { recursive: true, force: true });
-	fs.cpSync(path.join(repoRoot, "apps", "web", "dist"), path.join(webDestination, "dist"), {
-		recursive: true,
-		dereference: true,
-	});
-	const prerender = path.join(repoRoot, "apps", "web", "dist-prerender");
-	if (fs.existsSync(prerender)) {
-		fs.cpSync(prerender, path.join(webDestination, "dist-prerender"), { recursive: true, dereference: true });
-	}
+	stageNodeExecutable(path.dirname(process.execPath), path.join(stagingDir, "node"));
+	stageWebApp(
+		path.join(repoRoot, "apps", "web", "dist"),
+		path.join(repoRoot, "apps", "web", "dist-prerender"),
+		path.join(stagingDir, "web"),
+	);
 
 	const webviewDestination = path.join(stagingDir, "webview2");
 	fs.rmSync(webviewDestination, { recursive: true, force: true });
 	if (!findNamed(webviewExtract, "msedgewebview2.exe")) throw new Error("WebView2 runtime did not expand");
 	fs.cpSync(webviewExtract, webviewDestination, { recursive: true, dereference: true });
+	writeComponentManifest(stagingDir);
 
 	const payloadZip = path.join(cacheDir, "portable-payload.zip");
 	fs.rmSync(payloadZip, { force: true });
@@ -215,4 +306,6 @@ async function main() {
 	console.log(`portable exe ${outputExe}`);
 }
 
-await main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+	await main();
+}

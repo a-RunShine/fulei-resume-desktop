@@ -2509,6 +2509,7 @@ dependencies = [
  "tauri-build",
  "tiny_http",
  "ureq",
+ "winreg",
  "zip",
 ]
 

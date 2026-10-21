@@ -1,7 +1,7 @@
 import { pathToFileURL } from "node:url";
 import { serve } from "@hono/node-server";
 import { env } from "@reactive-resume/env/server";
-import { runStartupChecks } from "./startup/checks";
+import { reapStaleAgentRunsAfterHealthy, runStartupChecks } from "./startup/checks";
 
 export async function main() {
 	await runStartupChecks();
@@ -35,6 +35,7 @@ export async function main() {
 		},
 	);
 	const careerScheduler = startCareerScheduler();
+	if (process.env.DESKTOP === "1") void reapStaleAgentRunsAfterHealthy();
 
 	let shuttingDown = false;
 	const shutdown = () => {
