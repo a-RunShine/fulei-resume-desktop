@@ -15,8 +15,18 @@ This block is written and re-added by `turbo` before repository-scoped commands 
 
 ## Agent skills
 
-- Issues and specs: GitHub Issues for `reactive-resume/reactive-resume`. See `docs/agents/issue-tracker.md`.
-- Domain docs: single-context. Root `GLOSSARY.md` and `docs/adr/`; read before exploring. See `docs/agents/domain.md`.
+### Issue tracker
+
+GitHub Issues for `a-RunShine/reactive-resume`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default role names: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: root `GLOSSARY.md` and `docs/adr/`. See `docs/agents/domain.md`.
+
 - Check `git status --short` before editing. Preserve unrelated changes, including existing edits in this file.
 - Use scripts and configuration as the source of truth when documentation disagrees with them.
 
