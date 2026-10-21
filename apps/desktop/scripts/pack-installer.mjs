@@ -269,7 +269,7 @@ async function main() {
 
 	await run("pnpm", ["exec", "tauri", "build"], {
 		cwd: desktopDir,
-		env: { ...process.env, PATH: cargoPath() },
+		env: { ...process.env, PATH: cargoPath(), REACTIVE_RESUME_PACKAGING: "1" },
 	});
 
 	console.log(`installer runtime ${runtimeDir}`);

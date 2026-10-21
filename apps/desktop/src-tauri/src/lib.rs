@@ -477,10 +477,12 @@ fn boot_desktop(app: tauri::AppHandle, pid: Arc<Mutex<Option<u32>>>) -> BootOutc
     let mut clock = SystemClock;
     let mut browser = SystemBrowser;
     let mut processes = SystemProcess { pid };
+    let instance_lock = app_data.join("instance.lock");
     let mut boot = DesktopBoot {
         executable: &executable,
         runtime_override: runtime_override.as_deref(),
         app_data: &app_data,
+        instance_lock: &instance_lock,
         port: local_api::PORT,
         clock: &mut clock,
         surface: &mut surface,
@@ -492,6 +494,27 @@ fn boot_desktop(app: tauri::AppHandle, pid: Arc<Mutex<Option<u32>>>) -> BootOutc
 
 fn exit_after_startup_failure() -> ! {
     std::process::exit(1);
+}
+
+fn show_native_message(reason: &str) {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_OK};
+    let title: Vec<u16> = std::ffi::OsStr::new("Reactive Resume")
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let body: Vec<u16> = std::ffi::OsStr::new(reason)
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let _ = std::panic::catch_unwind(|| unsafe {
+        MessageBoxW(
+            std::ptr::null_mut(),
+            body.as_ptr(),
+            title.as_ptr(),
+            MB_OK | MB_ICONERROR,
+        );
+    });
 }
 
 fn desktop_app_data() -> Result<PathBuf, String> {
@@ -707,6 +730,10 @@ impl StartupSurface for GuiSurface {
         } else {
             BootOutcome::FailedWithoutWindow
         }
+    }
+
+    fn report_without_window(&mut self, reason: &str) {
+        show_native_message(reason);
     }
 
     fn navigate(&mut self, url: &str) {

@@ -7,8 +7,17 @@ fn main() {
         .join(".cache")
         .join("installer")
         .join("runtime");
+    let packaging = std::env::var("REACTIVE_RESUME_PACKAGING").is_ok_and(|value| value == "1");
     for name in ["node", "server", "web"] {
-        let _ = std::fs::create_dir_all(runtime.join(name));
+        let directory = runtime.join(name);
+        if packaging {
+            assert!(
+                directory.is_dir(),
+                "the installer runtime is not staged: {}",
+                directory.display()
+            );
+        }
+        let _ = std::fs::create_dir_all(directory);
     }
     tauri_build::build()
 }

@@ -8,6 +8,7 @@ pub(crate) trait Clock {
 pub(crate) trait StartupSurface {
     fn show_local(&mut self, status: &str) -> bool;
     fn present_failure(&mut self, reason: &str) -> BootOutcome;
+    fn report_without_window(&mut self, reason: &str);
     fn navigate(&mut self, url: &str);
 }
 
@@ -47,6 +48,7 @@ pub(crate) struct DesktopBoot<'a> {
     pub executable: &'a Path,
     pub runtime_override: Option<&'a Path>,
     pub app_data: &'a Path,
+    pub instance_lock: &'a Path,
     pub port: u16,
     pub clock: &'a mut dyn Clock,
     pub surface: &'a mut dyn StartupSurface,
@@ -79,14 +81,21 @@ pub(crate) fn fail(
 }
 
 fn run(boot: &mut DesktopBoot<'_>) -> Result<(), String> {
+    let _instance = match SingleInstance::acquire(boot.instance_lock) {
+        Ok(guard) => guard,
+        Err(reason) => return Err(reason),
+    };
     if port_is_busy(boot.port) {
         return Err(format!("port {} is already in use", boot.port));
     }
     let windowed = boot.surface.show_local("Preparing the runtime");
-    if !boot.browser.evergreen_installed() {
+    let evergreen = boot.browser.evergreen_installed();
+    if !evergreen {
+        boot.surface.report_without_window(WEBVIEW_MISSING);
         return Err(WEBVIEW_MISSING.to_string());
     }
     if !windowed {
+        boot.surface.report_without_window(WINDOW_UNAVAILABLE);
         return Err(WINDOW_UNAVAILABLE.to_string());
     }
     let runtime = runtime_root(boot.executable, boot.runtime_override);
@@ -172,6 +181,47 @@ fn port_is_busy(port: u16) -> bool {
     std::net::TcpListener::bind(("127.0.0.1", port)).is_err()
 }
 
+struct SingleInstance {
+    _file: std::fs::File,
+}
+
+impl SingleInstance {
+    fn acquire(path: &Path) -> Result<Self, String> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+        }
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create(true).truncate(false);
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+            options.share_mode(0);
+        }
+        match options.open(path) {
+            Ok(file) => Ok(Self { _file: file }),
+            Err(error) if is_already_running(&error) => {
+                Err("Reactive Resume is already running; close the other window first".to_string())
+            }
+            Err(error) => Err(format!("could not lock the desktop instance: {error}")),
+        }
+    }
+}
+
+fn is_already_running(error: &std::io::Error) -> bool {
+    #[cfg(windows)]
+    {
+        const SHARING_VIOLATION: i32 = 32;
+        const LOCK_VIOLATION: i32 = 33;
+        if matches!(
+            error.raw_os_error(),
+            Some(SHARING_VIOLATION | LOCK_VIOLATION)
+        ) {
+            return true;
+        }
+    }
+    error.kind() == std::io::ErrorKind::PermissionDenied
+}
+
 fn wait_until_healthy(port: u16, clock: &mut dyn Clock) -> Result<(), String> {
     let agent = ureq::AgentBuilder::new()
         .timeout(Duration::from_millis(500))
@@ -202,6 +252,8 @@ pub(crate) fn runtime_override() -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(windows)]
+    use std::os::windows::fs::OpenOptionsExt;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
@@ -209,7 +261,6 @@ mod tests {
     use tiny_http::{Response, Server, StatusCode};
 
     use super::*;
-
     struct FakeClock {
         sleeps: Vec<Duration>,
     }
@@ -244,6 +295,13 @@ mod tests {
             } else {
                 BootOutcome::FailedWithoutWindow
             }
+        }
+
+        fn report_without_window(&mut self, reason: &str) {
+            self.events
+                .lock()
+                .expect("events")
+                .push(format!("native:{reason}"));
         }
 
         fn navigate(&mut self, url: &str) {
@@ -337,6 +395,10 @@ mod tests {
 
         fn app_data(&self) -> PathBuf {
             self.root.join("app")
+        }
+
+        fn instance_lock(&self) -> PathBuf {
+            self.app_data().join("instance.lock")
         }
 
         fn node_exe(&self) -> PathBuf {
@@ -507,6 +569,7 @@ mod tests {
             executable: &exe,
             runtime_override: options.runtime_override.as_deref(),
             app_data: &app_data,
+            instance_lock: &fixture.instance_lock(),
             port: options.port,
             clock: &mut clock,
             surface: &mut surface,
@@ -563,6 +626,7 @@ mod tests {
             executable: &exe,
             runtime_override: None,
             app_data: &app_data,
+            instance_lock: &fixture.instance_lock(),
             port: fixture.port,
             clock: &mut clock,
             surface: &mut surface,
@@ -582,6 +646,21 @@ mod tests {
     fn assert_presented_in_the_window(report: &BootReport, fixture: &Fixture, reason: &str) {
         assert_eq!(report.outcome, BootOutcome::FailedInWindow);
         assert!(!report.outcome.exit_required());
+        assert_presented(report, fixture, reason);
+    }
+
+    fn assert_presented_without_a_window(report: &BootReport, fixture: &Fixture, reason: &str) {
+        assert_eq!(report.outcome, BootOutcome::FailedWithoutWindow);
+        assert!(report.outcome.exit_required());
+        assert!(
+            report.events.contains(&format!("native:{reason}")),
+            "the user was never told {reason:?}; saw {:?}",
+            report.events
+        );
+        assert_presented(report, fixture, reason);
+    }
+
+    fn assert_presented(report: &BootReport, fixture: &Fixture, reason: &str) {
         assert!(
             report.events.contains(&format!("failure:{reason}")),
             "the surface never presented {reason:?}; saw {:?}",
@@ -713,24 +792,49 @@ mod tests {
     }
 
     #[test]
-    fn a_missing_evergreen_webview_is_presented_in_the_window_and_leaves_no_side_effects() {
+    fn a_missing_evergreen_webview_is_presented_to_the_user_and_leaves_no_side_effects() {
         let fixture = Fixture::new();
         fixture.write_runtime();
         let before = install_tree(&fixture.install());
 
-        let report = boot(&fixture, fixture.port, false, 0);
+        let report = boot_without_spawn_and_browser(&fixture, false, false);
 
-        assert_presented_in_the_window(&report, &fixture, WEBVIEW_MISSING);
+        assert_presented_without_a_window(&report, &fixture, WEBVIEW_MISSING);
         assert_eq!(
             report.events,
             vec![
                 "show:Preparing the runtime".to_string(),
+                format!("native:{WEBVIEW_MISSING}"),
                 format!("failure:{WEBVIEW_MISSING}"),
             ]
         );
+        assert_eq!(report.outcome, BootOutcome::FailedWithoutWindow);
         assert!(report.sleeps.is_empty());
         assert!(report.stopped.is_empty());
         assert_eq!(install_tree(&fixture.install()), before);
+    }
+
+    #[test]
+    fn a_second_instance_fails_before_touching_the_server_even_before_the_port_is_taken() {
+        let fixture = Fixture::new();
+        fixture.write_runtime();
+        let held = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .share_mode(0)
+            .open(fixture.instance_lock())
+            .expect("hold the instance lock");
+
+        let report = boot_without_spawn(&fixture);
+        let reason = "Reactive Resume is already running; close the other window first";
+        assert_presented_in_the_window(&report, &fixture, reason);
+        assert!(report.stopped.is_empty());
+        drop(held);
+        assert_eq!(
+            boot(&fixture, fixture.port, true, 0).outcome,
+            BootOutcome::Running
+        );
     }
 
     #[test]
@@ -1066,6 +1170,7 @@ mod tests {
             executable: &exe,
             runtime_override: None,
             app_data: &app_data,
+            instance_lock: &fixture.instance_lock(),
             port: fixture.port,
             clock: &mut clock,
             surface: &mut surface,
