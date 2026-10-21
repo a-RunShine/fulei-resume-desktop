@@ -1,13 +1,15 @@
 use std::borrow::Cow;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, Condvar, Mutex};
 
-use portable::{BrowserHost, Clock, PortableBoot, ProcessHost, ServerLaunch, StartupSurface};
 use serde::Serialize;
+use startup::{
+    BootOutcome, BrowserHost, Clock, DesktopBoot, ProcessHost, ServerLaunch, StartupSurface,
+};
 use tauri::Manager;
 
 mod local_api;
-mod portable;
+mod startup;
 
 #[derive(Serialize)]
 struct ResumeListItem {
@@ -436,8 +438,9 @@ pub fn run() {
             let handle = app.handle().clone();
             let pid = Arc::clone(&setup_pid);
             std::thread::spawn(move || {
-                if let Err(error) = boot_desktop(handle, pid) {
-                    fail(&error);
+                let outcome = boot_desktop(handle, pid);
+                if outcome.exit_required() {
+                    exit_after_startup_failure();
                 }
             });
             Ok(())
@@ -455,26 +458,66 @@ pub fn run() {
         });
 }
 
-fn boot_desktop(app: tauri::AppHandle, pid: Arc<Mutex<Option<u32>>>) -> Result<(), String> {
-    let executable = std::env::current_exe().map_err(|error| error.to_string())?;
-    let app_data = portable_app_data()?;
+fn boot_desktop(app: tauri::AppHandle, pid: Arc<Mutex<Option<u32>>>) -> BootOutcome {
+    let mut surface = GuiSurface::new(app);
+    let app_data = desktop_app_data();
+    let executable = match std::env::current_exe() {
+        Ok(executable) => executable,
+        Err(error) => {
+            let reason = format!("the application directory could not be resolved: {error}");
+            let directory = app_data.as_deref().ok();
+            return startup::fail(&mut surface, directory, &reason);
+        }
+    };
+    let app_data = match app_data {
+        Ok(app_data) => app_data,
+        Err(reason) => return startup::fail(&mut surface, None, &reason),
+    };
+    let runtime_override = startup::runtime_override();
     let mut clock = SystemClock;
     let mut browser = SystemBrowser;
     let mut processes = SystemProcess { pid };
-    let mut surface = GuiSurface::new(app);
-    let mut boot = PortableBoot {
+    let instance_lock = app_data.join("instance.lock");
+    let mut boot = DesktopBoot {
         executable: &executable,
+        runtime_override: runtime_override.as_deref(),
         app_data: &app_data,
+        instance_lock: &instance_lock,
         port: local_api::PORT,
         clock: &mut clock,
         surface: &mut surface,
         browser: &mut browser,
         processes: &mut processes,
     };
-    portable::boot_portable(&mut boot)
+    startup::start(&mut boot)
 }
 
-fn portable_app_data() -> Result<PathBuf, String> {
+fn exit_after_startup_failure() -> ! {
+    std::process::exit(1);
+}
+
+fn show_native_message(reason: &str) {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_OK};
+    let title: Vec<u16> = std::ffi::OsStr::new("Reactive Resume")
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let body: Vec<u16> = std::ffi::OsStr::new(reason)
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let _ = std::panic::catch_unwind(|| unsafe {
+        MessageBoxW(
+            std::ptr::null_mut(),
+            body.as_ptr(),
+            title.as_ptr(),
+            MB_OK | MB_ICONERROR,
+        );
+    });
+}
+
+fn desktop_app_data() -> Result<PathBuf, String> {
     let local_app_data =
         std::env::var("LOCALAPPDATA").map_err(|_| "LOCALAPPDATA is not set".to_string())?;
     Ok(PathBuf::from(local_app_data).join("Reactive Resume"))
@@ -493,28 +536,6 @@ struct SystemBrowser;
 impl BrowserHost for SystemBrowser {
     fn evergreen_installed(&mut self) -> bool {
         evergreen_webview_installed()
-    }
-
-    fn grant_read_execute(&mut self, folder: &Path) -> Result<(), String> {
-        for sid in ["*S-1-15-2-2:(OI)(CI)(RX)", "*S-1-15-2-1:(OI)(CI)(RX)"] {
-            let status = command_without_window("icacls")
-                .arg(folder)
-                .arg("/grant")
-                .arg(sid)
-                .status()
-                .map_err(|error| error.to_string())?;
-            if !status.success() {
-                return Err("could not grant WebView2 permissions".to_string());
-            }
-        }
-        Ok(())
-    }
-
-    fn use_browser_folder(&mut self, folder: Option<&Path>) {
-        match folder {
-            Some(folder) => std::env::set_var("WEBVIEW2_BROWSER_EXECUTABLE_FOLDER", folder),
-            None => std::env::remove_var("WEBVIEW2_BROWSER_EXECUTABLE_FOLDER"),
-        }
     }
 }
 
@@ -551,20 +572,20 @@ impl ProcessHost for SystemProcess {
     fn spawn_server(&mut self, launch: &ServerLaunch) -> Result<u32, String> {
         if !launch.node.is_file() {
             return Err(format!(
-                "bundled node is missing: {}",
+                "Node runtime is missing: {}",
                 launch.node.display()
             ));
         }
         if !launch.script.is_file() {
             return Err(format!(
-                "desktop server is missing: {}",
+                "desktop server entry is missing: {}",
                 launch.script.display()
             ));
         }
         let node = launch
             .node
             .to_str()
-            .ok_or_else(|| "bundled node path is not unicode".to_string())?;
+            .ok_or_else(|| "node runtime path is not unicode".to_string())?;
         let log_path = launch
             .data_dir
             .parent()
@@ -609,7 +630,7 @@ struct GuiSurface {
     app: tauri::AppHandle,
     window: Arc<Mutex<Option<tauri::WebviewWindow>>>,
     ready: Arc<(Mutex<bool>, Condvar)>,
-    shown: bool,
+    attempted: bool,
 }
 
 impl GuiSurface {
@@ -618,75 +639,107 @@ impl GuiSurface {
             app,
             window: Arc::new(Mutex::new(None)),
             ready: Arc::new((Mutex::new(false), Condvar::new())),
-            shown: false,
+            attempted: false,
         }
     }
 
-    fn wait_until_window_exists(&self) {
+    fn wait_until_window_attempt_finished(&self) {
         let (lock, condition) = &*self.ready;
         let mut built = lock.lock().expect("window ready");
         while !*built {
             built = condition.wait(built).expect("window ready");
         }
     }
+
+    fn open(&mut self, status: &str) -> bool {
+        if self.attempted {
+            return self.window_exists();
+        }
+        self.attempted = true;
+        let status = status.to_string();
+        let app = self.app.clone();
+        let window = Arc::clone(&self.window);
+        let ready = Arc::clone(&self.ready);
+        let queued = self.app.run_on_main_thread(move || {
+            let parsed = startup_data_url(&status).parse().expect("startup url");
+            let mut builder =
+                tauri::WebviewWindowBuilder::new(&app, "main", tauri::WebviewUrl::External(parsed))
+                    .title("Reactive Resume")
+                    .inner_size(1440.0, 900.0)
+                    .resizable(true);
+            if let Some(args) = browser_args() {
+                builder = builder.additional_browser_args(&args);
+            }
+            if let Ok(created) = builder.build() {
+                *window.lock().expect("window") = Some(created);
+            }
+            let (lock, condition) = &*ready;
+            *lock.lock().expect("window ready") = true;
+            condition.notify_one();
+        });
+        if queued.is_err() {
+            let (lock, condition) = &*self.ready;
+            *lock.lock().expect("window ready") = true;
+            condition.notify_one();
+        }
+        self.wait_until_window_attempt_finished();
+        self.window_exists()
+    }
+
+    fn window_exists(&self) -> bool {
+        self.window
+            .lock()
+            .map(|window| window.is_some())
+            .unwrap_or(false)
+    }
+
+    fn update_status(&self, status: &str) -> bool {
+        let status = status.to_string();
+        let window = Arc::clone(&self.window);
+        self.app
+            .run_on_main_thread(move || {
+                let guard = window.lock().expect("window");
+                if let Some(window) = guard.as_ref() {
+                    let quoted =
+                        serde_json::to_string(&status).unwrap_or_else(|_| "\"\"".to_string());
+                    let _ = window.eval(format!(
+                        "document.getElementById('status').textContent = {quoted}"
+                    ));
+                }
+            })
+            .is_ok()
+    }
 }
 
 impl StartupSurface for GuiSurface {
-    fn show_local(&mut self, status: &str) {
-        let status = status.to_string();
-        if !self.shown {
-            self.shown = true;
-            let app = self.app.clone();
-            let window = Arc::clone(&self.window);
-            let ready = Arc::clone(&self.ready);
-            let queued = self.app.run_on_main_thread(move || {
-                let parsed = startup_data_url(&status).parse().expect("startup url");
-                let mut builder = tauri::WebviewWindowBuilder::new(
-                    &app,
-                    "main",
-                    tauri::WebviewUrl::External(parsed),
-                )
-                .title("Reactive Resume")
-                .inner_size(1440.0, 900.0)
-                .resizable(true);
-                if let Some(args) = browser_args() {
-                    builder = builder.additional_browser_args(&args);
-                }
-                match builder.build() {
-                    Ok(created) => {
-                        *window.lock().expect("window") = Some(created);
-                        let (lock, condition) = &*ready;
-                        *lock.lock().expect("window ready") = true;
-                        condition.notify_one();
-                    }
-                    Err(error) => fail(&error.to_string()),
-                }
-            });
-            if let Err(error) = queued {
-                fail(&error.to_string());
-            }
-            self.wait_until_window_exists();
-            return;
+    fn show_local(&mut self, status: &str) -> bool {
+        let created_now = !self.attempted;
+        if !self.open(status) {
+            return false;
         }
-        let window = Arc::clone(&self.window);
-        let queued = self.app.run_on_main_thread(move || {
-            let guard = window.lock().expect("window");
-            if let Some(window) = guard.as_ref() {
-                let quoted = serde_json::to_string(&status).unwrap_or_else(|_| "\"\"".to_string());
-                let _ = window.eval(format!(
-                    "document.getElementById('status').textContent = {quoted}"
-                ));
-            }
-        });
-        if let Err(error) = queued {
-            fail(&error.to_string());
+        created_now || self.update_status(status)
+    }
+
+    fn present_failure(&mut self, reason: &str) -> BootOutcome {
+        let created_now = !self.attempted;
+        if !self.open(reason) {
+            return BootOutcome::FailedWithoutWindow;
         }
+        if created_now || self.update_status(reason) {
+            BootOutcome::FailedInWindow
+        } else {
+            BootOutcome::FailedWithoutWindow
+        }
+    }
+
+    fn report_without_window(&mut self, reason: &str) {
+        show_native_message(reason);
     }
 
     fn navigate(&mut self, url: &str) {
         let url = url.to_string();
         let window = Arc::clone(&self.window);
-        let queued = self.app.run_on_main_thread(move || {
+        let _ = self.app.run_on_main_thread(move || {
             let guard = window.lock().expect("window");
             if let Some(window) = guard.as_ref() {
                 if let Ok(parsed) = url.parse() {
@@ -694,9 +747,6 @@ impl StartupSurface for GuiSurface {
                 }
             }
         });
-        if let Err(error) = queued {
-            fail(&error.to_string());
-        }
     }
 }
 
@@ -717,15 +767,6 @@ fn startup_data_url(status: &str) -> String {
         }
     }
     encoded
-}
-
-fn fail(message: &str) -> ! {
-    if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
-        let directory = std::path::PathBuf::from(local_app_data).join("Reactive Resume");
-        let _ = std::fs::create_dir_all(&directory);
-        let _ = std::fs::write(directory.join("boot.log"), message);
-    }
-    std::process::exit(1);
 }
 
 fn command_without_window(program: &str) -> std::process::Command {
