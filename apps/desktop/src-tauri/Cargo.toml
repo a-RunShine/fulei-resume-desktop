@@ -21,4 +21,3 @@ tauri = { version = "2", features = ["webview-data-url"] }
 tiny_http = "0.12"
 ureq = { version = "2.12", features = ["json"] }
 winreg = "0.56"
-zip = { version = "2", default-features = false, features = ["deflate"] }

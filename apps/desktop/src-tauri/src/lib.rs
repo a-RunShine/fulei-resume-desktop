@@ -1,13 +1,13 @@
 use std::borrow::Cow;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, Condvar, Mutex};
 
-use portable::{BrowserHost, Clock, PortableBoot, ProcessHost, ServerLaunch, StartupSurface};
 use serde::Serialize;
+use startup::{BrowserHost, Clock, DesktopBoot, ProcessHost, ServerLaunch, StartupSurface};
 use tauri::Manager;
 
 mod local_api;
-mod portable;
+mod startup;
 
 #[derive(Serialize)]
 struct ResumeListItem {
@@ -457,13 +457,15 @@ pub fn run() {
 
 fn boot_desktop(app: tauri::AppHandle, pid: Arc<Mutex<Option<u32>>>) -> Result<(), String> {
     let executable = std::env::current_exe().map_err(|error| error.to_string())?;
-    let app_data = portable_app_data()?;
+    let app_data = desktop_app_data()?;
+    let runtime_override = startup::runtime_override();
     let mut clock = SystemClock;
     let mut browser = SystemBrowser;
     let mut processes = SystemProcess { pid };
     let mut surface = GuiSurface::new(app);
-    let mut boot = PortableBoot {
+    let mut boot = DesktopBoot {
         executable: &executable,
+        runtime_override: runtime_override.as_deref(),
         app_data: &app_data,
         port: local_api::PORT,
         clock: &mut clock,
@@ -471,10 +473,10 @@ fn boot_desktop(app: tauri::AppHandle, pid: Arc<Mutex<Option<u32>>>) -> Result<(
         browser: &mut browser,
         processes: &mut processes,
     };
-    portable::boot_portable(&mut boot)
+    startup::start(&mut boot)
 }
 
-fn portable_app_data() -> Result<PathBuf, String> {
+fn desktop_app_data() -> Result<PathBuf, String> {
     let local_app_data =
         std::env::var("LOCALAPPDATA").map_err(|_| "LOCALAPPDATA is not set".to_string())?;
     Ok(PathBuf::from(local_app_data).join("Reactive Resume"))
@@ -493,28 +495,6 @@ struct SystemBrowser;
 impl BrowserHost for SystemBrowser {
     fn evergreen_installed(&mut self) -> bool {
         evergreen_webview_installed()
-    }
-
-    fn grant_read_execute(&mut self, folder: &Path) -> Result<(), String> {
-        for sid in ["*S-1-15-2-2:(OI)(CI)(RX)", "*S-1-15-2-1:(OI)(CI)(RX)"] {
-            let status = command_without_window("icacls")
-                .arg(folder)
-                .arg("/grant")
-                .arg(sid)
-                .status()
-                .map_err(|error| error.to_string())?;
-            if !status.success() {
-                return Err("could not grant WebView2 permissions".to_string());
-            }
-        }
-        Ok(())
-    }
-
-    fn use_browser_folder(&mut self, folder: Option<&Path>) {
-        match folder {
-            Some(folder) => std::env::set_var("WEBVIEW2_BROWSER_EXECUTABLE_FOLDER", folder),
-            None => std::env::remove_var("WEBVIEW2_BROWSER_EXECUTABLE_FOLDER"),
-        }
     }
 }
 
@@ -551,20 +531,20 @@ impl ProcessHost for SystemProcess {
     fn spawn_server(&mut self, launch: &ServerLaunch) -> Result<u32, String> {
         if !launch.node.is_file() {
             return Err(format!(
-                "bundled node is missing: {}",
+                "Node runtime is missing: {}",
                 launch.node.display()
             ));
         }
         if !launch.script.is_file() {
             return Err(format!(
-                "desktop server is missing: {}",
+                "desktop server entry is missing: {}",
                 launch.script.display()
             ));
         }
         let node = launch
             .node
             .to_str()
-            .ok_or_else(|| "bundled node path is not unicode".to_string())?;
+            .ok_or_else(|| "node runtime path is not unicode".to_string())?;
         let log_path = launch
             .data_dir
             .parent()
