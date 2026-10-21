@@ -6,8 +6,22 @@ pub(crate) trait Clock {
 }
 
 pub(crate) trait StartupSurface {
-    fn show_local(&mut self, status: &str);
+    fn show_local(&mut self, status: &str) -> bool;
+    fn present_failure(&mut self, reason: &str) -> BootOutcome;
     fn navigate(&mut self, url: &str);
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BootOutcome {
+    Running,
+    FailedInWindow,
+    FailedWithoutWindow,
+}
+
+impl BootOutcome {
+    pub(crate) fn exit_required(self) -> bool {
+        self == Self::FailedWithoutWindow
+    }
 }
 
 pub(crate) trait BrowserHost {
@@ -42,29 +56,39 @@ pub(crate) struct DesktopBoot<'a> {
 
 const POLL_INTERVAL: Duration = Duration::from_millis(100);
 const HEALTH_DEADLINE: Duration = Duration::from_secs(180);
+const WEBVIEW_MISSING: &str = "Microsoft Edge WebView2 runtime is not installed; install the Microsoft Edge WebView2 Runtime to run Reactive Resume";
+const WINDOW_UNAVAILABLE: &str = "the startup window could not be created";
 
-pub(crate) fn start(boot: &mut DesktopBoot<'_>) -> Result<(), String> {
+pub(crate) fn start(boot: &mut DesktopBoot<'_>) -> BootOutcome {
     match run(boot) {
-        Ok(()) => Ok(()),
-        Err(error) => {
-            let _ = std::fs::create_dir_all(boot.app_data);
-            let _ = std::fs::write(boot.app_data.join("boot.log"), &error);
-            Err(error)
-        }
+        Ok(()) => BootOutcome::Running,
+        Err(reason) => fail(boot.surface, Some(boot.app_data), &reason),
     }
+}
+
+pub(crate) fn fail(
+    surface: &mut dyn StartupSurface,
+    app_data: Option<&Path>,
+    reason: &str,
+) -> BootOutcome {
+    if let Some(app_data) = app_data {
+        let _ = std::fs::create_dir_all(app_data);
+        let _ = std::fs::write(app_data.join("boot.log"), reason);
+    }
+    surface.present_failure(reason)
 }
 
 fn run(boot: &mut DesktopBoot<'_>) -> Result<(), String> {
     if port_is_busy(boot.port) {
         return Err(format!("port {} is already in use", boot.port));
     }
+    let windowed = boot.surface.show_local("Preparing the runtime");
     if !boot.browser.evergreen_installed() {
-        return Err(
-            "Microsoft Edge WebView2 runtime is not installed; install the Microsoft Edge WebView2 Runtime to run Reactive Resume"
-                .to_string(),
-        );
+        return Err(WEBVIEW_MISSING.to_string());
     }
-    boot.surface.show_local("Preparing the runtime");
+    if !windowed {
+        return Err(WINDOW_UNAVAILABLE.to_string());
+    }
     let runtime = runtime_root(boot.executable, boot.runtime_override);
     let node = runtime.join("node").join("node.exe");
     let script = runtime.join("server").join("desktop-host.mjs");
@@ -186,14 +210,28 @@ mod tests {
 
     struct RecordingSurface {
         events: Arc<Mutex<Vec<String>>>,
+        window_available: bool,
     }
 
     impl StartupSurface for RecordingSurface {
-        fn show_local(&mut self, status: &str) {
+        fn show_local(&mut self, status: &str) -> bool {
             self.events
                 .lock()
                 .expect("events")
                 .push(format!("show:{status}"));
+            self.window_available
+        }
+
+        fn present_failure(&mut self, reason: &str) -> BootOutcome {
+            self.events
+                .lock()
+                .expect("events")
+                .push(format!("failure:{reason}"));
+            if self.window_available {
+                BootOutcome::FailedInWindow
+            } else {
+                BootOutcome::FailedWithoutWindow
+            }
         }
 
         fn navigate(&mut self, url: &str) {
@@ -307,6 +345,10 @@ mod tests {
             write_file(&self.server_entry(), b"server-bytes");
             write_file(&self.web_index(), b"web-bytes");
         }
+
+        fn boot_log(&self) -> String {
+            std::fs::read_to_string(self.app_data().join("boot.log")).expect("boot log")
+        }
     }
 
     impl Drop for Fixture {
@@ -331,10 +373,18 @@ mod tests {
     }
 
     struct BootReport {
-        result: Result<(), String>,
+        outcome: BootOutcome,
         events: Vec<String>,
         sleeps: Vec<Duration>,
         stopped: Vec<u32>,
+    }
+
+    struct BootOptions {
+        port: u16,
+        evergreen: bool,
+        unhealthy_before_ok: usize,
+        runtime_override: Option<PathBuf>,
+        window_available: bool,
     }
 
     fn boot(
@@ -343,27 +393,33 @@ mod tests {
         evergreen: bool,
         unhealthy_before_ok: usize,
     ) -> BootReport {
-        boot_with(fixture, port, evergreen, unhealthy_before_ok, None)
+        boot_with(
+            fixture,
+            BootOptions {
+                port,
+                evergreen,
+                unhealthy_before_ok,
+                runtime_override: None,
+                window_available: true,
+            },
+        )
     }
 
-    fn boot_with(
-        fixture: &Fixture,
-        port: u16,
-        evergreen: bool,
-        unhealthy_before_ok: usize,
-        runtime_override: Option<&Path>,
-    ) -> BootReport {
+    fn boot_with(fixture: &Fixture, options: BootOptions) -> BootReport {
         let events = Arc::new(Mutex::new(Vec::new()));
         let stopped = Arc::new(Mutex::new(Vec::new()));
         let mut clock = FakeClock { sleeps: Vec::new() };
         let mut surface = RecordingSurface {
             events: Arc::clone(&events),
+            window_available: options.window_available,
         };
-        let mut browser = TestBrowser { evergreen };
+        let mut browser = TestBrowser {
+            evergreen: options.evergreen,
+        };
         let mut processes = HealthServer {
             events: Arc::clone(&events),
-            port,
-            unhealthy_before_ok,
+            port: options.port,
+            unhealthy_before_ok: options.unhealthy_before_ok,
             polls: Arc::new(AtomicUsize::new(0)),
             stopped: Arc::clone(&stopped),
         };
@@ -371,23 +427,97 @@ mod tests {
         let app_data = fixture.app_data();
         let mut boot = DesktopBoot {
             executable: &exe,
-            runtime_override,
+            runtime_override: options.runtime_override.as_deref(),
             app_data: &app_data,
-            port,
+            port: options.port,
             clock: &mut clock,
             surface: &mut surface,
             browser: &mut browser,
             processes: &mut processes,
         };
-        let result = start(&mut boot);
+        let outcome = start(&mut boot);
         let seen_events = events.lock().expect("events").clone();
         let seen_stopped = stopped.lock().expect("stopped").clone();
         BootReport {
-            result,
+            outcome,
             events: seen_events,
             sleeps: clock.sleeps,
             stopped: seen_stopped,
         }
+    }
+
+    struct NeverSpawned;
+
+    impl ProcessHost for NeverSpawned {
+        fn spawn_server(&mut self, _launch: &ServerLaunch) -> Result<u32, String> {
+            panic!("the server was spawned for an incomplete runtime");
+        }
+
+        fn stop(&mut self, _pid: u32) {
+            panic!("the server was stopped for an incomplete runtime");
+        }
+    }
+
+    fn boot_without_spawn(fixture: &Fixture) -> BootReport {
+        boot_without_spawn_in(fixture, true)
+    }
+
+    fn boot_without_spawn_in(fixture: &Fixture, window_available: bool) -> BootReport {
+        boot_without_spawn_and_browser(fixture, window_available, true)
+    }
+
+    fn boot_without_spawn_and_browser(
+        fixture: &Fixture,
+        window_available: bool,
+        evergreen: bool,
+    ) -> BootReport {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let mut clock = FakeClock { sleeps: Vec::new() };
+        let mut surface = RecordingSurface {
+            events: Arc::clone(&events),
+            window_available,
+        };
+        let mut browser = TestBrowser { evergreen };
+        let mut processes = NeverSpawned;
+        let exe = fixture.exe();
+        let app_data = fixture.app_data();
+        let mut boot = DesktopBoot {
+            executable: &exe,
+            runtime_override: None,
+            app_data: &app_data,
+            port: fixture.port,
+            clock: &mut clock,
+            surface: &mut surface,
+            browser: &mut browser,
+            processes: &mut processes,
+        };
+        let outcome = start(&mut boot);
+        let seen_events = events.lock().expect("events").clone();
+        BootReport {
+            outcome,
+            events: seen_events,
+            sleeps: clock.sleeps,
+            stopped: Vec::new(),
+        }
+    }
+
+    fn assert_presented_in_the_window(report: &BootReport, fixture: &Fixture, reason: &str) {
+        assert_eq!(report.outcome, BootOutcome::FailedInWindow);
+        assert!(!report.outcome.exit_required());
+        assert!(
+            report.events.contains(&format!("failure:{reason}")),
+            "the surface never presented {reason:?}; saw {:?}",
+            report.events
+        );
+        assert!(
+            !report
+                .events
+                .iter()
+                .any(|event| event.starts_with("navigate:")),
+            "a failed startup navigated; saw {:?}",
+            report.events
+        );
+        assert_eq!(fixture.boot_log(), reason);
     }
 
     #[test]
@@ -397,7 +527,7 @@ mod tests {
 
         let report = boot(&fixture, fixture.port, true, 1);
 
-        report.result.expect("boot");
+        assert_eq!(report.outcome, BootOutcome::Running);
         assert_eq!(
             report.events,
             vec![
@@ -424,125 +554,72 @@ mod tests {
 
         let report = boot(&fixture, fixture.port, true, 0);
 
-        report.result.expect("boot");
+        assert_eq!(report.outcome, BootOutcome::Running);
         let expected = format!("navigate:http://127.0.0.1:{}/desktop/enter", fixture.port);
         assert_eq!(report.events.last(), Some(&expected));
     }
 
-    struct NeverSpawned;
-
-    impl ProcessHost for NeverSpawned {
-        fn spawn_server(&mut self, _launch: &ServerLaunch) -> Result<u32, String> {
-            panic!("the server was spawned for an incomplete runtime");
-        }
-
-        fn stop(&mut self, _pid: u32) {
-            panic!("the server was stopped for an incomplete runtime");
-        }
-    }
-
-    fn boot_without_spawn(fixture: &Fixture) -> (Result<(), String>, Vec<String>, Vec<Duration>) {
-        let events = Arc::new(Mutex::new(Vec::new()));
-        let mut clock = FakeClock { sleeps: Vec::new() };
-        let mut surface = RecordingSurface {
-            events: Arc::clone(&events),
-        };
-        let mut browser = TestBrowser { evergreen: true };
-        let mut processes = NeverSpawned;
-        let exe = fixture.exe();
-        let app_data = fixture.app_data();
-        let mut boot = DesktopBoot {
-            executable: &exe,
-            runtime_override: None,
-            app_data: &app_data,
-            port: fixture.port,
-            clock: &mut clock,
-            surface: &mut surface,
-            browser: &mut browser,
-            processes: &mut processes,
-        };
-        let result = start(&mut boot);
-        let seen_events = events.lock().expect("events").clone();
-        (result, seen_events, clock.sleeps)
-    }
-
     #[test]
-    fn a_missing_node_fails_with_its_full_path_and_never_spawns_the_server() {
+    fn a_missing_node_is_presented_in_the_window_and_never_spawns_the_server() {
         let fixture = Fixture::new();
         fixture.write_runtime();
         std::fs::remove_file(fixture.node_exe()).expect("remove node");
 
-        let (result, events, sleeps) = boot_without_spawn(&fixture);
+        let report = boot_without_spawn(&fixture);
 
-        let error = result.expect_err("missing node");
-        assert_eq!(
-            error,
-            format!("Node runtime is missing: {}", fixture.node_exe().display())
-        );
-        assert!(!events.iter().any(|event| event == "spawn"));
-        assert!(sleeps.is_empty());
-        assert_eq!(
-            std::fs::read_to_string(fixture.app_data().join("boot.log")).expect("boot log"),
-            error
-        );
+        let reason = format!("Node runtime is missing: {}", fixture.node_exe().display());
+        assert_presented_in_the_window(&report, &fixture, &reason);
+        assert!(!report.events.iter().any(|event| event == "spawn"));
+        assert!(report.sleeps.is_empty());
     }
 
     #[test]
-    fn a_missing_server_entry_fails_with_its_full_path_and_never_spawns_the_server() {
+    fn a_missing_server_entry_is_presented_in_the_window_and_never_spawns_the_server() {
         let fixture = Fixture::new();
         fixture.write_runtime();
         std::fs::remove_file(fixture.server_entry()).expect("remove server entry");
 
-        let (result, events, sleeps) = boot_without_spawn(&fixture);
+        let report = boot_without_spawn(&fixture);
 
-        let error = result.expect_err("missing server entry");
-        assert_eq!(
-            error,
-            format!(
-                "desktop server entry is missing: {}",
-                fixture.server_entry().display()
-            )
+        let reason = format!(
+            "desktop server entry is missing: {}",
+            fixture.server_entry().display()
         );
-        assert!(!events.iter().any(|event| event == "spawn"));
-        assert!(sleeps.is_empty());
+        assert_presented_in_the_window(&report, &fixture, &reason);
+        assert!(!report.events.iter().any(|event| event == "spawn"));
+        assert!(report.sleeps.is_empty());
     }
 
     #[test]
-    fn a_missing_web_index_fails_with_its_full_path_and_never_spawns_the_server() {
+    fn a_missing_web_index_is_presented_in_the_window_and_never_spawns_the_server() {
         let fixture = Fixture::new();
         fixture.write_runtime();
         std::fs::remove_file(fixture.web_index()).expect("remove web index");
 
-        let (result, events, sleeps) = boot_without_spawn(&fixture);
+        let report = boot_without_spawn(&fixture);
 
-        let error = result.expect_err("missing web index");
-        assert_eq!(
-            error,
-            format!("web build is missing: {}", fixture.web_index().display())
-        );
-        assert!(!events.iter().any(|event| event == "spawn"));
-        assert!(sleeps.is_empty());
+        let reason = format!("web build is missing: {}", fixture.web_index().display());
+        assert_presented_in_the_window(&report, &fixture, &reason);
+        assert!(!report.events.iter().any(|event| event == "spawn"));
+        assert!(report.sleeps.is_empty());
     }
 
     #[test]
-    fn a_busy_port_fails_before_runtime_validation_or_the_health_wait() {
+    fn a_busy_port_is_presented_in_the_window_before_runtime_validation_or_the_health_wait() {
         let fixture = Fixture::new();
         let _listener = std::net::TcpListener::bind(("127.0.0.1", fixture.port)).expect("listener");
 
-        let (result, events, sleeps) = boot_without_spawn(&fixture);
+        let report = boot_without_spawn(&fixture);
 
-        let error = result.expect_err("busy port");
-        assert_eq!(error, format!("port {} is already in use", fixture.port));
-        assert!(events.is_empty());
-        assert!(sleeps.is_empty());
-        assert_eq!(
-            std::fs::read_to_string(fixture.app_data().join("boot.log")).expect("boot log"),
-            error
-        );
+        let reason = format!("port {} is already in use", fixture.port);
+        assert_presented_in_the_window(&report, &fixture, &reason);
+        assert_eq!(report.events, vec![format!("failure:{reason}")]);
+        assert!(!report.events.iter().any(|event| event == "spawn"));
+        assert!(report.sleeps.is_empty());
     }
 
     #[test]
-    fn the_health_deadline_stops_the_spawned_server_and_writes_boot_log() {
+    fn the_health_deadline_is_presented_in_the_window_after_the_spawned_server_stops() {
         let fixture = Fixture::new();
         fixture.write_runtime();
 
@@ -554,39 +631,117 @@ mod tests {
             .sleeps
             .iter()
             .all(|sleep| *sleep == Duration::from_millis(100)));
-        assert!(!report
-            .events
-            .iter()
-            .any(|event| event.starts_with("navigate:")));
-        let error = report.result.expect_err("timeout");
-        assert_eq!(error, "desktop server did not become healthy");
-        assert_eq!(
-            std::fs::read_to_string(fixture.app_data().join("boot.log")).expect("boot log"),
-            error
-        );
+        assert_presented_in_the_window(&report, &fixture, "desktop server did not become healthy");
     }
 
     #[test]
-    fn a_missing_evergreen_webview_fails_with_a_clear_reason_and_leaves_no_side_effects() {
+    fn a_missing_evergreen_webview_is_presented_in_the_window_and_leaves_no_side_effects() {
         let fixture = Fixture::new();
         fixture.write_runtime();
         let before = install_tree(&fixture.install());
 
         let report = boot(&fixture, fixture.port, false, 0);
 
-        let error = report.result.expect_err("missing evergreen");
+        assert_presented_in_the_window(&report, &fixture, WEBVIEW_MISSING);
         assert_eq!(
-            error,
-            "Microsoft Edge WebView2 runtime is not installed; install the Microsoft Edge WebView2 Runtime to run Reactive Resume"
+            report.events,
+            vec![
+                "show:Preparing the runtime".to_string(),
+                format!("failure:{WEBVIEW_MISSING}"),
+            ]
         );
-        assert!(!report.events.iter().any(|event| event == "spawn"));
         assert!(report.sleeps.is_empty());
         assert!(report.stopped.is_empty());
         assert_eq!(install_tree(&fixture.install()), before);
-        assert_eq!(
-            std::fs::read_to_string(fixture.app_data().join("boot.log")).expect("boot log"),
-            error
+    }
+
+    #[test]
+    fn the_startup_page_is_created_before_the_evergreen_check_runs() {
+        let fixture = Fixture::new();
+        fixture.write_runtime();
+
+        let report = boot(&fixture, fixture.port, false, 0);
+
+        let shown = report
+            .events
+            .iter()
+            .position(|event| event == "show:Preparing the runtime")
+            .expect("the startup page was created");
+        let failed = report
+            .events
+            .iter()
+            .position(|event| event.starts_with("failure:"))
+            .expect("the failure was presented");
+        assert!(shown < failed);
+    }
+
+    #[test]
+    fn a_failure_without_a_window_still_writes_the_log_and_demands_a_non_zero_exit() {
+        let fixture = Fixture::new();
+        fixture.write_runtime();
+        std::fs::remove_file(fixture.node_exe()).expect("remove node");
+
+        let report = boot_without_spawn_in(&fixture, false);
+
+        assert_eq!(report.outcome, BootOutcome::FailedWithoutWindow);
+        assert!(report.outcome.exit_required());
+        assert_eq!(fixture.boot_log(), WINDOW_UNAVAILABLE);
+    }
+
+    #[test]
+    fn a_missing_webview_without_a_window_still_writes_the_log_and_demands_a_non_zero_exit() {
+        let fixture = Fixture::new();
+        fixture.write_runtime();
+
+        let report = boot_without_spawn_and_browser(&fixture, false, false);
+
+        assert_eq!(report.outcome, BootOutcome::FailedWithoutWindow);
+        assert!(report.outcome.exit_required());
+        assert_eq!(fixture.boot_log(), WEBVIEW_MISSING);
+    }
+
+    #[test]
+    fn every_startup_failure_reason_reaches_the_window_and_the_log() {
+        let busy = Fixture::new();
+        let listener = std::net::TcpListener::bind(("127.0.0.1", busy.port)).expect("listener");
+        let report = boot_without_spawn(&busy);
+        let port_reason = format!("port {} is already in use", busy.port);
+        assert_presented_in_the_window(&report, &busy, &port_reason);
+        drop(listener);
+
+        let node = Fixture::new();
+        node.write_runtime();
+        std::fs::remove_file(node.node_exe()).expect("remove node");
+        let report = boot_without_spawn(&node);
+        let node_reason = format!("Node runtime is missing: {}", node.node_exe().display());
+        assert_presented_in_the_window(&report, &node, &node_reason);
+
+        let server = Fixture::new();
+        server.write_runtime();
+        std::fs::remove_file(server.server_entry()).expect("remove server entry");
+        let report = boot_without_spawn(&server);
+        let server_reason = format!(
+            "desktop server entry is missing: {}",
+            server.server_entry().display()
         );
+        assert_presented_in_the_window(&report, &server, &server_reason);
+
+        let web = Fixture::new();
+        web.write_runtime();
+        std::fs::remove_file(web.web_index()).expect("remove web index");
+        let report = boot_without_spawn(&web);
+        let web_reason = format!("web build is missing: {}", web.web_index().display());
+        assert_presented_in_the_window(&report, &web, &web_reason);
+
+        let evergreen = Fixture::new();
+        evergreen.write_runtime();
+        let report = boot(&evergreen, evergreen.port, false, 0);
+        assert_presented_in_the_window(&report, &evergreen, WEBVIEW_MISSING);
+
+        let timeout = Fixture::new();
+        timeout.write_runtime();
+        let report = boot(&timeout, timeout.port, true, usize::MAX);
+        assert_presented_in_the_window(&report, &timeout, "desktop server did not become healthy");
     }
 
     fn install_tree(root: &Path) -> Vec<String> {
@@ -621,7 +776,10 @@ mod tests {
         fixture.write_runtime();
         let before = install_tree(&fixture.install());
 
-        boot(&fixture, fixture.port, true, 0).result.expect("boot");
+        assert_eq!(
+            boot(&fixture, fixture.port, true, 0).outcome,
+            BootOutcome::Running
+        );
 
         assert_eq!(install_tree(&fixture.install()), before);
         assert!(!fixture.install().join("runtime").exists());
@@ -639,12 +797,14 @@ mod tests {
             .join("one.json");
         write_file(&resume, b"{\"id\":\"one\"}");
 
-        boot(&fixture, fixture.port, true, 0)
-            .result
-            .expect("first boot");
-        boot(&fixture, free_port(), true, 0)
-            .result
-            .expect("second boot");
+        assert_eq!(
+            boot(&fixture, fixture.port, true, 0).outcome,
+            BootOutcome::Running
+        );
+        assert_eq!(
+            boot(&fixture, free_port(), true, 0).outcome,
+            BootOutcome::Running
+        );
 
         assert_eq!(std::fs::read(&resume).expect("resume"), b"{\"id\":\"one\"}");
     }
@@ -683,6 +843,7 @@ mod tests {
         let mut clock = FakeClock { sleeps: Vec::new() };
         let mut surface = RecordingSurface {
             events: Arc::new(Mutex::new(Vec::new())),
+            window_available: true,
         };
         let mut browser = TestBrowser { evergreen: true };
         let mut processes = RememberSqlite {
@@ -702,7 +863,7 @@ mod tests {
             processes: &mut processes,
         };
 
-        start(&mut boot).expect("boot");
+        assert_eq!(start(&mut boot), BootOutcome::Running);
 
         assert_eq!(seen.lock().expect("seen").clone().expect("sqlite"), sqlite);
     }
@@ -747,9 +908,18 @@ mod tests {
             b"web",
         );
 
-        let report = boot_with(&fixture, fixture.port, true, 0, Some(&elsewhere));
+        let report = boot_with(
+            &fixture,
+            BootOptions {
+                port: fixture.port,
+                evergreen: true,
+                unhealthy_before_ok: 0,
+                runtime_override: Some(elsewhere),
+                window_available: true,
+            },
+        );
 
-        report.result.expect("boot");
+        assert_eq!(report.outcome, BootOutcome::Running);
         assert!(report.events.iter().any(|event| event == "spawn"));
     }
 
