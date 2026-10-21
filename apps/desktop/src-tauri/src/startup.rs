@@ -124,7 +124,19 @@ fn run(boot: &mut DesktopBoot<'_>) -> Result<(), String> {
     }
     boot.surface
         .navigate(&format!("http://127.0.0.1:{}/desktop/enter", boot.port));
+    reclaim_legacy_runtime(boot.app_data);
     Ok(())
+}
+
+fn reclaim_legacy_runtime(app_data: &Path) {
+    let legacy = app_data.join("runtime");
+    let Ok(metadata) = std::fs::symlink_metadata(&legacy) else {
+        return;
+    };
+    if !metadata.is_dir() {
+        return;
+    }
+    let _ = std::fs::remove_dir_all(&legacy);
 }
 
 fn runtime_root(executable: &Path, override_dir: Option<&Path>) -> PathBuf {
@@ -348,6 +360,72 @@ mod tests {
 
         fn boot_log(&self) -> String {
             std::fs::read_to_string(self.app_data().join("boot.log")).expect("boot log")
+        }
+
+        fn legacy_runtime(&self) -> PathBuf {
+            self.app_data().join("runtime")
+        }
+
+        fn write_legacy_runtime(&self) {
+            write_file(
+                &self.legacy_runtime().join("node").join("node.exe"),
+                b"legacy-node-bytes",
+            );
+            write_file(
+                &self
+                    .legacy_runtime()
+                    .join("server")
+                    .join("desktop-host.mjs"),
+                b"legacy-server-bytes",
+            );
+            write_file(
+                &self
+                    .legacy_runtime()
+                    .join("web")
+                    .join("dist")
+                    .join("index.html"),
+                b"legacy-web-bytes",
+            );
+        }
+
+        fn write_user_state(&self) {
+            write_file(&self.resume(), b"{\"id\":\"one\",\"name\":\"Mine\"}");
+            write_file(&self.app_data().join("server.log"), b"server log line\n");
+            write_file(&self.boot_log_path(), b"previous boot log\n");
+            write_file(
+                &self.app_data().join("provider.json"),
+                b"{\"baseUrl\":\"\",\"model\":\"\"}",
+            );
+        }
+
+        fn resume(&self) -> PathBuf {
+            self.app_data()
+                .join("data")
+                .join("resumes")
+                .join("one.json")
+        }
+
+        fn boot_log_path(&self) -> PathBuf {
+            self.app_data().join("boot.log")
+        }
+
+        fn assert_user_state_intact(&self) {
+            assert_eq!(
+                std::fs::read(self.resume()).expect("resume"),
+                b"{\"id\":\"one\",\"name\":\"Mine\"}"
+            );
+            assert_eq!(
+                std::fs::read(self.app_data().join("server.log")).expect("server log"),
+                b"server log line\n"
+            );
+            assert_eq!(
+                std::fs::read(self.boot_log_path()).expect("boot log"),
+                b"previous boot log\n"
+            );
+            assert_eq!(
+                std::fs::read(self.app_data().join("provider.json")).expect("provider"),
+                b"{\"baseUrl\":\"\",\"model\":\"\"}"
+            );
         }
     }
 
@@ -807,6 +885,138 @@ mod tests {
         );
 
         assert_eq!(std::fs::read(&resume).expect("resume"), b"{\"id\":\"one\"}");
+    }
+
+    #[test]
+    fn a_successful_start_reclaims_the_legacy_portable_runtime_and_keeps_user_state() {
+        let fixture = Fixture::new();
+        fixture.write_runtime();
+        fixture.write_legacy_runtime();
+        fixture.write_user_state();
+
+        let report = boot(&fixture, fixture.port, true, 0);
+
+        assert_eq!(report.outcome, BootOutcome::Running);
+        assert!(
+            !fixture.legacy_runtime().exists(),
+            "the legacy runtime survived a successful start at {}",
+            fixture.legacy_runtime().display()
+        );
+        fixture.assert_user_state_intact();
+        assert!(fixture.app_data().join("data").is_dir());
+    }
+
+    #[test]
+    fn a_failed_start_leaves_the_legacy_portable_runtime_untouched() {
+        let fixture = Fixture::new();
+        fixture.write_runtime();
+        fixture.write_legacy_runtime();
+        std::fs::remove_file(fixture.node_exe()).expect("remove node");
+
+        let report = boot_without_spawn(&fixture);
+
+        let reason = format!("Node runtime is missing: {}", fixture.node_exe().display());
+        assert_presented_in_the_window(&report, &fixture, &reason);
+        assert!(fixture
+            .legacy_runtime()
+            .join("node")
+            .join("node.exe")
+            .is_file());
+        assert!(fixture
+            .legacy_runtime()
+            .join("web")
+            .join("dist")
+            .join("index.html")
+            .is_file());
+    }
+
+    #[test]
+    fn a_legacy_runtime_that_is_not_a_directory_is_left_alone() {
+        let fixture = Fixture::new();
+        fixture.write_runtime();
+        fixture.write_user_state();
+        write_file(&fixture.legacy_runtime(), b"not-a-directory");
+
+        let report = boot(&fixture, fixture.port, true, 0);
+
+        assert_eq!(report.outcome, BootOutcome::Running);
+        assert_eq!(
+            std::fs::read(fixture.legacy_runtime()).expect("runtime file"),
+            b"not-a-directory"
+        );
+        fixture.assert_user_state_intact();
+    }
+
+    #[test]
+    fn a_health_failure_after_the_spawn_leaves_the_legacy_portable_runtime_untouched() {
+        let fixture = Fixture::new();
+        fixture.write_runtime();
+        fixture.write_legacy_runtime();
+
+        let report = boot(&fixture, fixture.port, true, usize::MAX);
+
+        assert_eq!(report.stopped, vec![77]);
+        assert_presented_in_the_window(&report, &fixture, "desktop server did not become healthy");
+        assert!(fixture.legacy_runtime().is_dir());
+    }
+
+    #[test]
+    fn a_missing_legacy_portable_runtime_is_a_no_op_and_the_start_still_succeeds() {
+        let fixture = Fixture::new();
+        fixture.write_runtime();
+        fixture.write_user_state();
+        assert!(!fixture.legacy_runtime().exists());
+
+        let report = boot(&fixture, fixture.port, true, 0);
+
+        assert_eq!(report.outcome, BootOutcome::Running);
+        assert!(!fixture.legacy_runtime().exists());
+        fixture.assert_user_state_intact();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_failed_reclaim_does_not_fail_startup_and_a_later_start_retries() {
+        let fixture = Fixture::new();
+        fixture.write_runtime();
+        fixture.write_legacy_runtime();
+        fixture.write_user_state();
+        let locked = fixture.legacy_runtime().join("node").join("node.exe");
+
+        let first = {
+            let _held = hold_against_deletion(&locked);
+            boot(&fixture, fixture.port, true, 0)
+        };
+
+        assert_eq!(first.outcome, BootOutcome::Running);
+        assert_eq!(
+            first.events.last(),
+            Some(&format!(
+                "navigate:http://127.0.0.1:{}/desktop/enter",
+                fixture.port
+            ))
+        );
+        assert!(
+            fixture.legacy_runtime().exists(),
+            "the reclaim unexpectedly succeeded while a file was held open"
+        );
+        fixture.assert_user_state_intact();
+
+        let second = boot(&fixture, free_port(), true, 0);
+
+        assert_eq!(second.outcome, BootOutcome::Running);
+        assert!(!fixture.legacy_runtime().exists());
+        fixture.assert_user_state_intact();
+    }
+
+    #[cfg(windows)]
+    fn hold_against_deletion(path: &Path) -> std::fs::File {
+        use std::os::windows::fs::OpenOptionsExt;
+        std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(path)
+            .expect("hold")
     }
 
     #[test]
