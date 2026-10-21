@@ -1,155 +1,67 @@
-import { execFileSync, spawn, type ChildProcess } from "node:child_process";
-import { mkdirSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import type { Page } from "@playwright/test";
+import { readFileSync } from "node:fs";
+import { createServer } from "node:http";
 import { afterAll, expect, it } from "vitest";
-import { chromium, type Page } from "@playwright/test";
+import { expect as expectPage } from "@playwright/test";
+import {
+	blockExternal,
+	desktopDataDirectory,
+	desktopPort,
+	filesUnder,
+	killLeftoverWindows,
+	openDesktopWindow,
+	stopWindow,
+	windowDirectory,
+} from "./window-runtime";
 
-const desktopRoot = fileURLToPath(new URL("..", import.meta.url));
-const name = "Ada Lovelace";
-const summary = "Builds reliable interfaces.";
-const model = "desktop-stub";
-const apiKey = "sk-desktop-provider-test-key";
 const reply = "Lead with the interface work.";
-const debugPort = 9337;
-
-type ProviderRequest = {
-	url: string;
-	body: string;
-};
-
-let windowProcess: ChildProcess | undefined;
-
-const stopWindow = () => {
-	const pid = windowProcess?.pid;
-	if (!pid) return;
-	windowProcess = undefined;
-	try {
-		execFileSync("taskkill.exe", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore" });
-	} catch {
-		return;
-	}
-};
-
-const visualStudioCommand = () => {
-	const vswhere = join(
-		process.env["ProgramFiles(x86)"] ?? "C:\\Program Files (x86)",
-		"Microsoft Visual Studio",
-		"Installer",
-		"vswhere.exe",
-	);
-	const installation = execFileSync(
-		vswhere,
-		[
-			"-latest",
-			"-products",
-			"*",
-			"-requires",
-			"Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
-			"-property",
-			"installationPath",
-		],
-		{ encoding: "utf8" },
-	).trim();
-	const vcvars = join(installation, "VC", "Auxiliary", "Build", "vcvars64.bat");
-	return `call "${vcvars}" >nul && set PATH=C:\\Users\\Administrator\\.cargo\\bin;%PATH% && pnpm exec tauri dev`;
-};
+const model = "desktop-stub";
+const apiKey = "sk-desktop-window-provider-key";
 
 afterAll(() => {
 	stopWindow();
+	killLeftoverWindows();
 });
 
-const isExternalHost = (url: URL) => {
-	const hostname = url.hostname;
-	if (hostname === "localhost" || hostname === "127.0.0.1" || hostname.endsWith(".localhost")) return false;
-	return url.protocol !== "tauri:" && url.protocol !== "ipc:" && url.protocol !== "asset:";
-};
-
-const relevantLog = (chunks: string[]) =>
-	chunks
-		.join("")
-		.replaceAll("\r", "\n")
-		.split("\n")
-		.map((line) => line.trim())
-		.filter((line) => line.length > 0 && !line.startsWith("Compiling ") && !line.includes("Building ["))
-		.slice(-80)
-		.join("\n");
-
-const waitForAppTarget = async (port: number, exited: Promise<number>) => {
-	const deadline = Date.now() + 600_000;
-	let lastError = "desktop window did not open";
-	let foreignSince = 0;
-	while (Date.now() < deadline) {
-		const exit = await Promise.race([
-			exited.then((code) => code),
-			new Promise<undefined>((resolve) => setTimeout(resolve, 0)),
-		]);
-		if (exit !== undefined) throw new Error(`desktop window exited (${exit})`);
-		try {
-			const response = await fetch(`http://127.0.0.1:${port}/json/list`);
-			if (response.ok) {
-				const targets = (await response.json()) as { url?: string }[];
-				const urls = targets.map((target) => target.url ?? "").filter((url) => url.length > 0);
-				if (urls.some((url) => url.includes("127.0.0.1:1420"))) return;
-				const foreign = urls.filter((url) => url.startsWith("http") && !url.includes("127.0.0.1:1420"));
-				if (foreign.length > 0) {
-					if (foreignSince === 0) foreignSince = Date.now();
-					lastError = `desktop opened ${foreign.join(", ")} instead of 1420`;
-					if (Date.now() - foreignSince > 30_000) throw new Error(lastError);
-				} else {
-					foreignSince = 0;
-					lastError = urls.length > 0 ? `debugging targets: ${urls.join(", ")}` : "desktop page has no url yet";
-				}
-			} else {
-				foreignSince = 0;
-				lastError = `debugging port status ${response.status}`;
-			}
-		} catch (error) {
-			if (error instanceof Error && error.message.startsWith("desktop opened")) throw error;
-			foreignSince = 0;
-			lastError = error instanceof Error ? error.message : String(error);
-		}
-		await new Promise((resolve) => setTimeout(resolve, 500));
-	}
-	throw new Error(lastError);
-};
-
-const waitForPortToClose = async (port: number, path: string) => {
-	const deadline = Date.now() + 45_000;
-	while (Date.now() < deadline) {
-		try {
-			await fetch(`http://127.0.0.1:${port}${path}`, { signal: AbortSignal.timeout(400) });
-		} catch {
-			return;
-		}
-		await new Promise((resolve) => setTimeout(resolve, 250));
-	}
-};
-
-const headerValue = (value: IncomingMessage["headers"]["authorization"]) => (Array.isArray(value) ? value[0] : value);
+type ProviderRequest = { url: string; body: string; authorization: string | undefined };
 
 const startProvider = async () => {
 	const requests: ProviderRequest[] = [];
-	const server = createServer((request: IncomingMessage, response: ServerResponse) => {
+	const server = createServer((request, response) => {
 		const chunks: Buffer[] = [];
 		request.on("data", (chunk: Buffer) => chunks.push(chunk));
 		request.on("end", () => {
-			const host = headerValue(request.headers.host) ?? "";
+			const body = Buffer.concat(chunks).toString("utf8");
+			const streamed = body.includes('"stream":true');
+			const host = request.headers.host ?? "";
 			requests.push({
 				url: `http://${host}${request.url ?? ""}`,
-				body: Buffer.concat(chunks).toString("utf8"),
+				body,
+				authorization: request.headers.authorization,
 			});
-			if (headerValue(request.headers.authorization) !== `Bearer ${apiKey}`) {
-				const authorization = headerValue(request.headers.authorization);
-				const reason = authorization ? "authorization header did not match" : "no authorization header";
-				response.writeHead(401, { "Content-Type": "text/plain" });
-				response.end(reason);
+			if (!streamed) {
+				response.writeHead(200, { "Content-Type": "application/json" });
+				response.end(
+					JSON.stringify({
+						id: "chatcmpl-window",
+						object: "chat.completion",
+						created: 0,
+						model,
+						choices: [{ index: 0, message: { role: "assistant", content: "1" }, finish_reason: "stop" }],
+						usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+					}),
+				);
 				return;
 			}
-			response.writeHead(200, { "Content-Type": "application/json" });
-			response.end(JSON.stringify({ choices: [{ message: { content: reply } }] }));
+			response.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" });
+			const chunk = (delta: Record<string, unknown>, finish: string | null = null) =>
+				response.write(
+					`data: ${JSON.stringify({ id: "chatcmpl-window", object: "chat.completion.chunk", created: 0, model, choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`,
+				);
+			chunk({ role: "assistant", content: "" });
+			for (const word of reply.split(" ")) chunk({ content: `${word} ` });
+			chunk({}, "stop");
+			response.end("data: [DONE]\n\n");
 		});
 	});
 	await new Promise<void>((resolve) => {
@@ -160,185 +72,106 @@ const startProvider = async () => {
 	return {
 		requests,
 		baseUrl: `http://127.0.0.1:${address.port}/v1`,
-		close: () =>
-			new Promise<void>((resolve, reject) => {
-				server.close((error) => (error ? reject(error) : resolve()));
-			}),
+		close: () => new Promise<void>((resolve) => server.close(() => resolve())),
 	};
 };
 
-const openDesktop = async (userDataDirectory: string, dataDirectory: string) => {
-	mkdirSync(userDataDirectory, { recursive: true });
-	mkdirSync(dataDirectory, { recursive: true });
-	const logs: string[] = [];
-	const pageErrors: string[] = [];
-	windowProcess = spawn(visualStudioCommand(), {
-		cwd: desktopRoot,
-		shell: true,
-		env: {
-			...process.env,
-			PATH: `C:\\Users\\Administrator\\.cargo\\bin;${process.env.PATH ?? ""}`,
-			REACTIVE_RESUME_DATA_DIR: dataDirectory,
-			WEBVIEW2_USER_DATA_FOLDER: userDataDirectory,
-			REACTIVE_RESUME_DEBUG_PORT: String(debugPort),
-		},
+const createBlankResume = async (page: Page) => {
+	const created = await page.request.post(`http://127.0.0.1:${desktopPort}/api/openapi/resumes`, {
+		data: { name: "助手会话", tags: [], withSampleData: true },
 	});
-	const exited = new Promise<number>((resolve) => {
-		windowProcess?.on("exit", (code) => resolve(code ?? 1));
-	});
-	windowProcess.stdout?.on("data", (chunk: Buffer) => {
-		logs.push(chunk.toString());
-	});
-	windowProcess.stderr?.on("data", (chunk: Buffer) => {
-		logs.push(chunk.toString());
-	});
-	const close = async () => {
-		stopWindow();
-		await waitForPortToClose(debugPort, "/json/version");
-		await waitForPortToClose(1420, "/");
-	};
-	try {
-		await waitForAppTarget(debugPort, exited);
-		const browser = await chromium.connectOverCDP(`http://127.0.0.1:${debugPort}`);
-		const pageDeadline = Date.now() + 30_000;
-		let page: Page | undefined;
-		while (Date.now() < pageDeadline) {
-			page = browser
-				.contexts()
-				.flatMap((context) => context.pages())
-				.find((candidate) => candidate.url().includes("127.0.0.1:1420"));
-			if (page) break;
-			await new Promise((resolve) => setTimeout(resolve, 200));
-		}
-		if (!page) {
-			const urls = browser
-				.contexts()
-				.flatMap((context) => context.pages())
-				.map((candidate) => candidate.url());
-			throw new Error(`desktop window has no resume page: ${urls.join(", ")}`);
-		}
-		page.setDefaultTimeout(60_000);
-		page.on("pageerror", (error) => pageErrors.push(error.message));
-		page.on("console", (message) => {
-			if (message.type() === "error") pageErrors.push(message.text());
-		});
-		await page.route(isExternalHost, (route) => route.abort());
-		await page.waitForURL("**127.0.0.1:1420/**", { timeout: 180_000 });
-		return {
-			page,
-			logs,
-			pageErrors,
-			close: async () => {
-				try {
-					await browser.close();
-				} finally {
-					await close();
-				}
-			},
-		};
-	} catch (error) {
-		try {
-			await close();
-		} catch {
-			stopWindow();
-		}
-		const detail = [...pageErrors, relevantLog(logs)].join("\n").slice(-4000);
-		throw new Error(`${error instanceof Error ? error.message : String(error)}\n${detail}`);
-	}
+	expect(created.status()).toBe(200);
+	return (await created.json()) as string;
 };
 
-const storedDocuments = (directory: string) =>
-	readdirSync(directory, { encoding: "utf8", recursive: true }).filter((entry) =>
-		statSync(join(directory, entry)).isFile(),
-	);
-
-const askAndShowReply = async (page: Page, requests: ProviderRequest[]) => {
-	await page.getByRole("button", { name: "Ask Assistant" }).click();
-	try {
-		await page.getByText(reply).waitFor();
-	} catch (error) {
-		const shown = await page.locator("#reply").innerText();
-		const providerState = await page.locator("#provider-status").innerText();
-		const urls = requests.map((request) => request.url).join(", ");
-		throw new Error(
-			`${error instanceof Error ? error.message : String(error)}\nreply: ${shown}\nprovider: ${providerState}\nrequests: ${urls}`,
-			{ cause: error },
-		);
-	}
+const openAssistant = async (page: Page) => {
+	await page.getByRole("button", { name: "Assistant", exact: true }).click();
+	const assistant = page.getByRole("region", { name: "Assistant" });
+	await expectPage(assistant).toBeVisible({ timeout: 180_000 });
+	return assistant;
 };
 
-it("shows the configured provider reply and keeps the api key out of the stored resume", async () => {
-	const runDirectory = join(tmpdir(), `reactive-resume-provider-${process.pid}`);
-	rmSync(runDirectory, { recursive: true, force: true });
-	const dataDirectory = join(runDirectory, "data");
+const connectProvider = async (assistant: ReturnType<Page["getByRole"]>, baseUrl: string) => {
+	await assistant.getByRole("button", { name: "Other · OpenAI-compatible" }).click();
+	await assistant.getByLabel("Base URL").fill(baseUrl);
+	await assistant.getByLabel("API key").fill(apiKey);
+	await assistant.getByLabel("Model").fill(model);
+	await assistant.getByRole("button", { name: "Connect" }).click();
+	await expectPage(assistant.getByLabel("Message the assistant")).toBeVisible({ timeout: 180_000 });
+};
+
+const chatRequests = (requests: ProviderRequest[]) =>
+	requests.filter((request) => request.body.includes('"stream":true'));
+
+const ask = async (
+	page: Page,
+	assistant: ReturnType<Page["getByRole"]>,
+	provider: { requests: ProviderRequest[] },
+	expected: number,
+) => {
+	const composer = assistant.getByLabel("Message the assistant");
+	await composer.fill("How should my summary open?");
+	await composer.press("Enter");
+	await expectPage.poll(() => chatRequests(provider.requests).length, { timeout: 180_000 }).toBe(expected);
+	await expectPage(page.getByText(reply).last()).toBeVisible({ timeout: 180_000 });
+};
+
+it("answers through the provider the window saved, and the key never reaches the resume store", async () => {
+	const directory = windowDirectory("provider");
 	const provider = await startProvider();
-	const detailFor = (logs: string[], pageErrors: string[]) =>
-		[...pageErrors, relevantLog(logs)].join("\n").slice(-4000);
+	const first = await openDesktopWindow({
+		appDirectory: directory,
+		debugPort: 9331,
+		environment: { FLAG_ALLOW_UNSAFE_AI_BASE_URL: "true" },
+	});
 
 	try {
-		const first = await openDesktop(join(runDirectory, "webview-a"), dataDirectory);
-		try {
-			await first.page.getByRole("button", { name: "New Resume" }).click();
-			await first.page.getByLabel("Name").fill(name);
-			await first.page.getByRole("button", { name: "Summary", exact: true }).click();
-			await first.page.getByRole("textbox", { name: "Summary" }).fill(summary);
-			await first.page.getByLabel("Provider").fill(provider.baseUrl);
-			await first.page.getByLabel("Model").fill(model);
-			await first.page.getByLabel("API key").fill(apiKey);
-			expect(await first.page.getByLabel("API key").inputValue()).toBe(apiKey);
-			await first.page.getByRole("button", { name: "Save Provider" }).click();
-			await first.page.getByText("Provider saved").waitFor();
-			await first.page.getByLabel("API key").fill("");
-			await askAndShowReply(first.page, provider.requests);
+		await blockExternal(first.page);
+		const resumeId = await createBlankResume(first.page);
+		await first.page.goto(`http://127.0.0.1:${desktopPort}/builder/${resumeId}`);
+		await first.page.waitForURL(/\/builder\/.+/);
+		await expectPage(first.page.getByRole("textbox", { name: "Full name", exact: true })).toBeVisible({
+			timeout: 180_000,
+		});
 
-			const firstRequest = provider.requests[0];
-			if (!firstRequest) throw new Error("provider received no assistant request");
-			expect(provider.requests.map((request) => request.url)).toEqual([`${provider.baseUrl}/chat/completions`]);
-			expect((JSON.parse(firstRequest.body) as { model?: string }).model).toBe(model);
+		const assistant = await openAssistant(first.page);
+		await connectProvider(assistant, provider.baseUrl);
+		await ask(first.page, assistant, provider, 1);
 
-			const storedResume = readFileSync(join(dataDirectory, "resume.json"), "utf8");
-			expect(storedResume).toContain(name);
-			expect(storedResume).toContain(summary);
-			expect(storedResume).not.toContain(apiKey);
-		} catch (error) {
-			throw new Error(
-				`${error instanceof Error ? error.message : String(error)}\n${detailFor(first.logs, first.pageErrors)}`,
-			);
-		} finally {
-			await first.close();
-		}
-
-		const second = await openDesktop(join(runDirectory, "webview-b"), dataDirectory);
-		try {
-			await expect
-				.poll(async () => second.page.getByLabel("Provider").inputValue(), { timeout: 30_000 })
-				.toBe(provider.baseUrl);
-			await expect.poll(async () => second.page.getByLabel("Model").inputValue(), { timeout: 30_000 }).toBe(model);
-			await expect.poll(async () => second.page.getByLabel("API key").inputValue(), { timeout: 30_000 }).toBe("");
-			await askAndShowReply(second.page, provider.requests);
-
-			expect(provider.requests.map((request) => request.url)).toEqual([
-				`${provider.baseUrl}/chat/completions`,
-				`${provider.baseUrl}/chat/completions`,
-			]);
-			expect(provider.requests.map((request) => (JSON.parse(request.body) as { model?: string }).model)).toEqual([
-				model,
-				model,
-			]);
-			const documents = storedDocuments(dataDirectory);
-			expect(documents.length).toBeGreaterThan(0);
-			for (const documentName of documents) {
-				expect(readFileSync(join(dataDirectory, documentName), "utf8")).not.toContain(apiKey);
-			}
-		} catch (error) {
-			throw new Error(
-				`${error instanceof Error ? error.message : String(error)}\n${detailFor(second.logs, second.pageErrors)}`,
-			);
-		} finally {
-			await second.close();
-		}
+		const sent = chatRequests(provider.requests);
+		expect(sent).toHaveLength(1);
+		const request = sent[0];
+		if (!request) throw new Error("the provider received no chat request");
+		expect(request.url).toBe(`${provider.baseUrl}/chat/completions`);
+		expect((JSON.parse(request.body) as { model?: string }).model).toBe(model);
+		expect(request.authorization).toBe(`Bearer ${apiKey}`);
 	} finally {
-		await provider.close();
-		stopWindow();
+		await first.close();
+	}
+
+	const stored = filesUnder(desktopDataDirectory(directory));
+	expect(stored.length).toBeGreaterThan(0);
+	for (const path of stored) expect(readFileSync(path).includes(apiKey)).toBe(false);
+
+	const second = await openDesktopWindow({
+		appDirectory: directory,
+		debugPort: 9332,
+		environment: { FLAG_ALLOW_UNSAFE_AI_BASE_URL: "true" },
+	});
+	try {
+		await blockExternal(second.page);
+		await second.page.goto(`http://127.0.0.1:${desktopPort}/dashboard`);
+		await expectPage(second.page.getByRole("heading", { name: "Documents" })).toBeVisible({ timeout: 180_000 });
+		await second.page.getByRole("link", { name: "助手会话", exact: true }).first().click();
+		await second.page.waitForURL(/\/builder\/.+/);
+		const assistant = await openAssistant(second.page);
+		await expectPage(assistant.getByLabel("Message the assistant")).toBeVisible({ timeout: 180_000 });
+		await ask(second.page, assistant, provider, 2);
+		const [secondRequest] = chatRequests(provider.requests).slice(-1);
+		if (!secondRequest) throw new Error("the provider received no second chat request");
+		expect(secondRequest.url).toBe(`${provider.baseUrl}/chat/completions`);
+		expect(secondRequest.authorization).toBe(`Bearer ${apiKey}`);
+	} finally {
+		await second.close();
 	}
 });
