@@ -73,6 +73,18 @@ it("maps the staged runtime to the install root so node, server and web sit besi
 	}
 });
 
+it("creates the resource directories before the tauri build script validates them", () => {
+	const buildScript = fs.readFileSync(path.join(srcTauriDir, "build.rs"), "utf8");
+	const config = readConfig();
+
+	for (const source of Object.keys(config.bundle?.resources ?? {})) {
+		const name = path.basename(source);
+		expect(buildScript).toContain(`"${name}"`);
+	}
+
+	expect(buildScript.indexOf("create_dir_all")).toBeLessThan(buildScript.indexOf("tauri_build::build"));
+});
+
 it("points the installer hook at the committed hooks script", () => {
 	const config = readConfig();
 	const hooks = config.bundle?.windows?.nsis?.installerHooks;
