@@ -20,5 +20,17 @@ export function desktopServerDependencyStaysExternal(id: string): boolean {
 	}
 	if (normalized.endsWith(".wasm") || normalized.endsWith(".node")) return true;
 	const name = packageNameOf(normalized);
-	return name === "@electric-sql/pglite" || name === "sharp" || name.startsWith("@img/");
+	return (
+		name === "@electric-sql/pglite" ||
+		name === "sharp" ||
+		name === "css-tree" ||
+		name === "mdn-data" ||
+		name.startsWith("@img/")
+	);
+}
+
+export function desktopServerShouldBundleDependency(id: string): boolean {
+	const normalized = id.replaceAll("\\", "/");
+	if (normalized.startsWith("node:")) return false;
+	return !desktopServerDependencyStaysExternal(id);
 }

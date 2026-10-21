@@ -275,7 +275,7 @@ fn component_files_present(
         let Ok(entry) = archive.by_index(index) else {
             return false;
         };
-        let entry_name = entry.name().replace('\\', "/");
+        let entry_name = normalized_zip_name(entry.name());
         let Some(relative) = entry_name.strip_prefix(&prefix) else {
             continue;
         };
@@ -313,16 +313,33 @@ fn find_named(directory: &Path, file_name: &str) -> Option<PathBuf> {
     None
 }
 
+fn normalized_zip_name(name: &str) -> String {
+    let mut normalized = name.replace('\\', "/");
+    while normalized.starts_with("./") {
+        normalized = normalized[2..].to_string();
+    }
+    normalized
+}
+
 fn read_component_manifest(executable: &Path, zip_len: u64) -> Result<Manifest, String> {
     let mut archive = zip::ZipArchive::new(open_range(executable, zip_len)?)
         .map_err(|error| error.to_string())?;
-    let mut entry = archive
-        .by_name("manifest.json")
-        .map_err(|_| "portable runtime trailer is invalid".to_string())?;
     let mut text = String::new();
-    entry
-        .read_to_string(&mut text)
-        .map_err(|error| error.to_string())?;
+    let mut found = false;
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index).map_err(|error| error.to_string())?;
+        if normalized_zip_name(entry.name()) != "manifest.json" {
+            continue;
+        }
+        entry
+            .read_to_string(&mut text)
+            .map_err(|error| error.to_string())?;
+        found = true;
+        break;
+    }
+    if !found {
+        return Err("portable runtime trailer is invalid".to_string());
+    }
     serde_json::from_str(&text).map_err(|_| "portable runtime trailer is invalid".to_string())
 }
 
@@ -424,7 +441,7 @@ fn extract_component(
     let prefix = format!("{name}/");
     for index in 0..archive.len() {
         let mut entry = archive.by_index(index).map_err(|error| error.to_string())?;
-        let entry_name = entry.name().replace('\\', "/");
+        let entry_name = normalized_zip_name(entry.name());
         let Some(relative) = entry_name.strip_prefix(&prefix) else {
             continue;
         };
@@ -1193,6 +1210,39 @@ mod tests {
         assert_eq!(
             std::fs::read_to_string(fixture.app_data().join("boot.log")).unwrap(),
             error
+        );
+    }
+
+    #[test]
+    #[test]
+    fn a_zip_entry_with_a_dot_slash_prefix_still_boots() {
+        let fixture = Fixture::new();
+        write_portable(
+            &fixture.exe(),
+            &[
+                (
+                    "./manifest.json",
+                    br#"{"node":"node-hash-1","server":"server-hash-1","web":"web-hash-1","webview2":"webview-hash-1"}"#,
+                ),
+                ("./node/node.exe", b"node-bytes"),
+                ("./server/desktop-host.mjs", b"server-bytes"),
+                ("./web/dist/index.html", b"web-bytes"),
+                ("./webview2/Fixed/msedgewebview2.exe", b"webview-bytes"),
+            ],
+        );
+        boot_once(&fixture, fixture.port, true, 0).expect("prefixed zip");
+        assert_eq!(std::fs::read(fixture.node_exe()).unwrap(), b"node-bytes");
+        assert_eq!(
+            std::fs::read(
+                fixture
+                    .app_data()
+                    .join("runtime")
+                    .join("web")
+                    .join("dist")
+                    .join("index.html")
+            )
+            .unwrap(),
+            b"web-bytes"
         );
     }
 

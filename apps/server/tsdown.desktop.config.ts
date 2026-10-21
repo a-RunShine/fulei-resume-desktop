@@ -1,5 +1,5 @@
 import { defineConfig } from "tsdown";
-import { desktopServerDependencyStaysExternal } from "./src/desktop-bundle.ts";
+import { desktopServerDependencyStaysExternal, desktopServerShouldBundleDependency } from "./src/desktop-bundle.ts";
 import baseConfig from "./tsdown.config.ts";
 
 const base = baseConfig as { plugins?: unknown[] };
@@ -12,7 +12,6 @@ export default defineConfig({
 	},
 	deps: {
 		neverBundle: (id: string) => desktopServerDependencyStaysExternal(id),
-		alwaysBundle: (id: string) =>
-			id.startsWith("@reactive-resume/") || id.replaceAll("\\", "/").includes("/@reactive-resume/"),
+		alwaysBundle: (id: string) => desktopServerShouldBundleDependency(id),
 	},
 });

@@ -30,7 +30,10 @@ fn database_path(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
             return Ok(std::path::PathBuf::from(trimmed));
         }
     }
-    let directory = app.path().app_data_dir().map_err(|error| error.to_string())?;
+    let directory = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| error.to_string())?;
     std::fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
     Ok(directory.join("resumes.sqlite"))
 }
@@ -139,7 +142,11 @@ fn read_resume(app: tauri::AppHandle, id: String) -> Result<ResumeRecord, String
 }
 
 #[tauri::command]
-fn save_resume(app: tauri::AppHandle, id: String, document: serde_json::Value) -> Result<(), String> {
+fn save_resume(
+    app: tauri::AppHandle,
+    id: String,
+    document: serde_json::Value,
+) -> Result<(), String> {
     let stored = document.to_string();
     with_resume_db(&app, |connection| {
         let updated = connection
@@ -278,7 +285,9 @@ fn store_api_key(api_key: &str) -> Result<(), String> {
             Err(error) => Err(error.to_string()),
         };
     }
-    entry.set_password(api_key).map_err(|error| error.to_string())
+    entry
+        .set_password(api_key)
+        .map_err(|error| error.to_string())
 }
 
 fn stored_api_key() -> Result<String, String> {
@@ -290,7 +299,8 @@ fn stored_api_key() -> Result<String, String> {
 }
 
 fn read_provider() -> Result<ProviderSettings, String> {
-    let bytes = std::fs::read(data_directory().join("provider.json")).map_err(|error| error.to_string())?;
+    let bytes =
+        std::fs::read(data_directory().join("provider.json")).map_err(|error| error.to_string())?;
     serde_json::from_slice(&bytes).map_err(|error| error.to_string())
 }
 
@@ -555,6 +565,10 @@ impl ProcessHost for SystemProcess {
             .node
             .to_str()
             .ok_or_else(|| "bundled node path is not unicode".to_string())?;
+        let log_path = launch
+            .data_dir
+            .parent()
+            .map(|parent| parent.join("server.log"));
         let mut command = command_without_window(node);
         command
             .current_dir(&launch.current_dir)
@@ -564,6 +578,13 @@ impl ProcessHost for SystemProcess {
             .env("PORT", launch.port.to_string());
         if let Some(sqlite) = &launch.legacy_sqlite {
             command.env("DESKTOP_SQLITE", sqlite);
+        }
+        if let Some(log_path) = log_path {
+            if let Ok(log) = std::fs::File::create(&log_path) {
+                let error_log = log.try_clone().map_err(|error| error.to_string())?;
+                command.stdout(std::process::Stdio::from(log));
+                command.stderr(std::process::Stdio::from(error_log));
+            }
         }
         let child = command.spawn().map_err(|error| error.to_string())?;
         let pid = child.id();

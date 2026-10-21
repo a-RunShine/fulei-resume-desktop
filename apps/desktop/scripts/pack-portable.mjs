@@ -1,10 +1,12 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
+import { isBuiltin } from "node:module";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
+import { crc32 } from "node:zlib";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const desktopDir = path.join(repoRoot, "apps", "desktop");
@@ -63,9 +65,9 @@ function packageName(specifier) {
 	if (
 		specifier.startsWith(".") ||
 		specifier.startsWith("/") ||
-		specifier.startsWith("node:") ||
 		specifier.startsWith("#") ||
-		specifier.startsWith("file:")
+		specifier.startsWith("file:") ||
+		isBuiltin(specifier)
 	) {
 		return null;
 	}
@@ -79,7 +81,11 @@ function packageName(specifier) {
 	return /^[a-z0-9-~][a-z0-9-._~]*$/i.test(name ?? "") ? name : null;
 }
 
-function importedPackages(directory) {
+function withoutComments(text) {
+	return text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:\\])\/\/.*$/gm, "$1");
+}
+
+export function importedPackages(directory) {
 	const names = new Set();
 	const pending = [directory];
 	while (pending.length > 0) {
@@ -92,21 +98,23 @@ function importedPackages(directory) {
 				continue;
 			}
 			if (!entry.name.endsWith(".mjs") && !entry.name.endsWith(".js")) continue;
-			const text = fs.readFileSync(entryPath, "utf8");
-			for (const match of text.matchAll(/(?:from|import)\s*\(?\s*["']([^"']+)["']/g)) {
-				const name = packageName(match[1]);
-				if (name) names.add(name);
-			}
-			for (const match of text.matchAll(/require\(\s*["']([^"']+)["']\s*\)/g)) {
-				const name = packageName(match[1]);
-				if (name) names.add(name);
+			const text = withoutComments(fs.readFileSync(entryPath, "utf8"));
+			const patterns = [
+				/(?:^|[;\n])\s*(?:export\s+)?import(?:\s+type)?\s+(?:[^"'()]+from\s+)?["']([^"']+)["']/g,
+				/(?:^|[;\n])\s*export\s+\*\s+from\s+["']([^"']+)["']/g,
+			];
+			for (const pattern of patterns) {
+				for (const match of text.matchAll(pattern)) {
+					const name = packageName(match[1]);
+					if (name) names.add(name);
+				}
 			}
 		}
 	}
 	return names;
 }
 
-const namedExternalPackages = new Set(["@electric-sql/pglite", "sharp"]);
+const namedExternalPackages = new Set(["@electric-sql/pglite", "sharp", "css-tree", "mdn-data"]);
 
 function containsRuntimeAsset(directory) {
 	const pending = [directory];
@@ -126,9 +134,21 @@ function shipsExternally(name, directory) {
 	return namedExternalPackages.has(name) || name.startsWith("@img/") || containsRuntimeAsset(directory);
 }
 
+function packageDirectory(modulesDir, name) {
+	const directory = path.join(modulesDir, ...name.split("/"));
+	return fs.existsSync(directory) ? directory : null;
+}
+
+function packageDependencyNames(directory) {
+	const packageJson = path.join(directory, "package.json");
+	if (!fs.existsSync(packageJson)) return [];
+	const packageInfo = JSON.parse(fs.readFileSync(packageJson, "utf8"));
+	return [...Object.keys(packageInfo.dependencies ?? {}), ...Object.keys(packageInfo.optionalDependencies ?? {})];
+}
+
 function externalPackageNames(modulesDir) {
 	if (!fs.existsSync(modulesDir)) return [];
-	const names = [];
+	const roots = [];
 	for (const entry of fs.readdirSync(modulesDir, { withFileTypes: true })) {
 		if (!entry.isDirectory() || entry.name === ".bin") continue;
 		if (entry.name.startsWith("@")) {
@@ -136,13 +156,25 @@ function externalPackageNames(modulesDir) {
 			for (const child of fs.readdirSync(scopeDir, { withFileTypes: true })) {
 				if (!child.isDirectory()) continue;
 				const name = `${entry.name}/${child.name}`;
-				if (shipsExternally(name, path.join(scopeDir, child.name))) names.push(name);
+				if (shipsExternally(name, path.join(scopeDir, child.name))) roots.push(name);
 			}
 			continue;
 		}
-		if (shipsExternally(entry.name, path.join(modulesDir, entry.name))) names.push(entry.name);
+		if (shipsExternally(entry.name, path.join(modulesDir, entry.name))) roots.push(entry.name);
 	}
-	return names;
+	const names = new Set(roots);
+	const pending = [...roots];
+	while (pending.length > 0) {
+		const name = pending.pop();
+		const directory = packageDirectory(modulesDir, name);
+		if (!directory) continue;
+		for (const dependency of packageDependencyNames(directory)) {
+			if (names.has(dependency) || !packageDirectory(modulesDir, dependency)) continue;
+			names.add(dependency);
+			pending.push(dependency);
+		}
+	}
+	return [...names];
 }
 
 export function stageNodeExecutable(source, destination) {
@@ -162,6 +194,22 @@ export function stageWebApp(distDir, prerenderDir, destination) {
 		fs.rmSync(path.join(destination, "dist-prerender"), { recursive: true, force: true });
 }
 
+function expandPackageClosure(modulesDir, roots) {
+	const names = new Set(roots);
+	const pending = [...roots];
+	while (pending.length > 0) {
+		const name = pending.pop();
+		const directory = packageDirectory(modulesDir, name);
+		if (!directory) continue;
+		for (const dependency of packageDependencyNames(directory)) {
+			if (names.has(dependency) || !packageDirectory(modulesDir, dependency)) continue;
+			names.add(dependency);
+			pending.push(dependency);
+		}
+	}
+	return [...names];
+}
+
 export function stageServer({ bundleDir, modulesDir, migrationsDir, destination }) {
 	fs.rmSync(destination, { recursive: true, force: true });
 	fs.mkdirSync(destination, { recursive: true });
@@ -171,7 +219,11 @@ export function stageServer({ bundleDir, modulesDir, migrationsDir, destination 
 		path.join(destination, "package.json"),
 		JSON.stringify({ name: "reactive-resume-desktop-server", private: true, type: "module" }),
 	);
-	for (const name of externalPackageNames(modulesDir)) {
+	const names = expandPackageClosure(modulesDir, [
+		...externalPackageNames(modulesDir),
+		...importedPackages(destination),
+	]);
+	for (const name of names) {
 		const from = path.join(modulesDir, ...name.split("/"));
 		const to = path.join(destination, "node_modules", ...name.split("/"));
 		fs.mkdirSync(path.dirname(to), { recursive: true });
@@ -211,8 +263,88 @@ export function componentHashes(stagingDir) {
 	};
 }
 
-function writeComponentManifest(stagingDir) {
+export function writeComponentManifest(stagingDir) {
 	fs.writeFileSync(path.join(stagingDir, "manifest.json"), JSON.stringify(componentHashes(stagingDir)));
+}
+
+function collectFiles(root) {
+	const files = [];
+	const pending = [""];
+	while (pending.length > 0) {
+		const relative = pending.pop();
+		const directory = relative ? path.join(root, relative) : root;
+		for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+			const child = relative ? `${relative}/${entry.name}` : entry.name;
+			if (entry.isDirectory()) pending.push(child);
+			else files.push(child.replaceAll("\\", "/"));
+		}
+	}
+	files.sort();
+	return files;
+}
+
+export function writeStoredZip(sourceDir, destFile) {
+	fs.mkdirSync(path.dirname(destFile), { recursive: true });
+	const fd = fs.openSync(destFile, "w");
+	const central = [];
+	try {
+		for (const name of collectFiles(sourceDir)) {
+			const nameBytes = Buffer.from(name, "utf8");
+			const localOffset = fs.fstatSync(fd).size;
+			const header = Buffer.alloc(30);
+			header.writeUInt32LE(0x04034b50, 0);
+			header.writeUInt16LE(20, 4);
+			header.writeUInt16LE(nameBytes.length, 26);
+			fs.writeSync(fd, header);
+			fs.writeSync(fd, nameBytes);
+			let crc = 0;
+			let size = 0;
+			const input = fs.openSync(path.join(sourceDir, name), "r");
+			const chunk = Buffer.alloc(1024 * 1024);
+			try {
+				for (;;) {
+					const read = fs.readSync(input, chunk, 0, chunk.length, size);
+					if (read === 0) break;
+					const slice = chunk.subarray(0, read);
+					crc = crc32(slice, crc);
+					fs.writeSync(fd, slice);
+					size += read;
+				}
+			} finally {
+				fs.closeSync(input);
+			}
+			if (size > 0xffffffff) throw new Error(`zip entry too large: ${name}`);
+			header.writeUInt32LE(crc >>> 0, 14);
+			header.writeUInt32LE(size, 18);
+			header.writeUInt32LE(size, 22);
+			fs.writeSync(fd, header.subarray(14, 26), 0, 12, localOffset + 14);
+			central.push({ nameBytes, crc: crc >>> 0, size, localOffset });
+		}
+		if (central.length > 0xffff) throw new Error("too many zip entries");
+		const centralStart = fs.fstatSync(fd).size;
+		for (const entry of central) {
+			const record = Buffer.alloc(46);
+			record.writeUInt32LE(0x02014b50, 0);
+			record.writeUInt16LE(20, 4);
+			record.writeUInt16LE(20, 6);
+			record.writeUInt32LE(entry.crc, 16);
+			record.writeUInt32LE(entry.size, 20);
+			record.writeUInt32LE(entry.size, 24);
+			record.writeUInt16LE(entry.nameBytes.length, 28);
+			record.writeUInt32LE(entry.localOffset, 42);
+			fs.writeSync(fd, record);
+			fs.writeSync(fd, entry.nameBytes);
+		}
+		const end = Buffer.alloc(22);
+		end.writeUInt32LE(0x06054b50, 0);
+		end.writeUInt16LE(central.length, 8);
+		end.writeUInt16LE(central.length, 10);
+		end.writeUInt32LE(fs.fstatSync(fd).size - centralStart, 12);
+		end.writeUInt32LE(centralStart, 16);
+		fs.writeSync(fd, end);
+	} finally {
+		fs.closeSync(fd);
+	}
 }
 
 async function download(url, destination) {
@@ -274,11 +406,18 @@ async function main() {
 	if (!findNamed(webviewExtract, "msedgewebview2.exe")) throw new Error("WebView2 runtime did not expand");
 	fs.cpSync(webviewExtract, webviewDestination, { recursive: true, dereference: true });
 	writeComponentManifest(stagingDir);
+	await sealPortable();
+}
 
+export async function sealPortable() {
 	const payloadZip = path.join(cacheDir, "portable-payload.zip");
 	fs.rmSync(payloadZip, { force: true });
-	await run("tar.exe", ["-a", "-c", "-h", "-f", payloadZip, "-C", stagingDir, "."]);
+	writeStoredZip(stagingDir, payloadZip);
+	await appendPortablePayload();
+}
 
+export async function appendPortablePayload() {
+	const payloadZip = path.join(cacheDir, "portable-payload.zip");
 	const zipSize = fs.statSync(payloadZip).size;
 	const hash = createHash("sha256");
 	const versionBytes = Buffer.alloc(56);
@@ -306,6 +445,6 @@ async function main() {
 	console.log(`portable exe ${outputExe}`);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && path.basename(process.argv[1]) === "pack-portable.mjs" && !process.env.VITEST) {
 	await main();
 }
