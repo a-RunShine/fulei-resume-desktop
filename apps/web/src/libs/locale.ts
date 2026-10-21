@@ -6,6 +6,7 @@ import Cookies from "js-cookie";
 import { defaultLocale, isLocale } from "@reactive-resume/utils/locale";
 
 const storageKey = "locale";
+const preferenceCookie = { expires: 365, path: "/", sameSite: "lax" as const };
 const messageLoaders = import.meta.glob<{ messages: Messages }>("../../locales/*.po");
 const relativeTimeDivisions: Array<{ amount: number; unit: Intl.RelativeTimeFormatUnit }> = [
 	{ amount: 31_536_000_000, unit: "year" },
@@ -107,7 +108,7 @@ export const getLocale = () => {
 	// A `?locale=` address (the homepage's hreflang alternates) picks the language and keeps it, like the switcher.
 	const requested = new URLSearchParams(window.location.search).get(storageKey);
 	if (isLocale(requested)) {
-		Cookies.set(storageKey, requested);
+		Cookies.set(storageKey, requested, preferenceCookie);
 		return requested;
 	}
 
@@ -147,6 +148,6 @@ export const loadLocale = async (locale: string) => {
 
 export const changeLocale = (value: string | null) => {
 	if (!value || !isLocale(value)) return;
-	Cookies.set(storageKey, value);
+	Cookies.set(storageKey, value, preferenceCookie);
 	window.location.reload();
 };

@@ -8,7 +8,9 @@ import { templateSchema } from "@reactive-resume/schema/templates";
 import { defaultLocale, getLocaleAlternates, isLocale, localizedUrl } from "@reactive-resume/utils/locale";
 
 function resolveWebDistPath() {
+	const configured = process.env.DESKTOP_WEB_DIST;
 	const candidates = [
+		...(configured ? [configured] : []),
 		// Source layout: apps/server/src/static/web.ts -> apps/web/dist
 		fileURLToPath(new URL("../../../web/dist", import.meta.url)),
 		// Bundled layout: apps/server/dist/index.mjs -> apps/web/dist

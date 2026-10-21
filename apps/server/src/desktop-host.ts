@@ -33,5 +33,6 @@ process.env.STRICT_SCHEMA_CHECK = "false";
 process.env.DESKTOP = "1";
 mkdirSync(process.env.LOCAL_STORAGE_PATH, { recursive: true });
 
-const { main } = await import("./index.ts");
-await main();
+const serverEntry = new URL([".", "/", "index.mjs"].join(""), import.meta.url).href;
+const server = (await import(serverEntry)) as { main: () => Promise<void> };
+await server.main();

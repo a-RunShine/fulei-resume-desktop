@@ -11,6 +11,7 @@ export type Theme = z.infer<typeof themeSchema>;
 export type ResolvedTheme = "light" | "dark";
 
 const storageKey = "theme";
+const preferenceCookie = { expires: 365, path: "/", sameSite: "lax" as const };
 const defaultTheme: Theme = "system";
 
 export const systemDarkQuery = "(prefers-color-scheme: dark)";
@@ -37,5 +38,5 @@ export const getTheme = () => {
 };
 
 export const setThemeCookie = (theme: Theme) => {
-	Cookies.set(storageKey, theme);
+	Cookies.set(storageKey, theme, preferenceCookie);
 };

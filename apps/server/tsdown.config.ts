@@ -83,6 +83,7 @@ const promptAssetsPlugin: TsdownPlugin = {
 export default defineConfig({
 	entry: {
 		index: "src/index.ts",
+		"desktop-host": "src/desktop-host.ts",
 		vercel: "src/vercel.ts",
 		"prepare-deployment": "src/prepare-deployment.ts",
 		"migrate-legacy-styles": "src/migrate-legacy-styles.ts",
