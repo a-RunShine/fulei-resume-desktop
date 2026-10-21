@@ -76,6 +76,5 @@ poc-out/
 
 # Desktop shell build and prepared CJK faces (not shipped)
 apps/desktop/.cache
-apps/desktop/portable
 apps/desktop/src-tauri/target
 apps/desktop/src-tauri/gen
