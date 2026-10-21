@@ -93,6 +93,12 @@ export function importedPackages(directory) {
 
 export const namedExternalPackages = new Set(["@electric-sql/pglite", "sharp", "css-tree", "mdn-data"]);
 
+export const installerExcludedPackages = new Set(["next"]);
+
+export function installerExcludesPackage(name) {
+	return installerExcludedPackages.has(name) || name.startsWith("@next/");
+}
+
 function containsRuntimeAsset(directory) {
 	const pending = [directory];
 	while (pending.length > 0) {
@@ -108,6 +114,7 @@ function containsRuntimeAsset(directory) {
 }
 
 export function shipsExternally(name, directory) {
+	if (installerExcludesPackage(name)) return false;
 	return namedExternalPackages.has(name) || name.startsWith("@img/") || containsRuntimeAsset(directory);
 }
 
@@ -146,7 +153,8 @@ export function externalPackageNames(modulesDir) {
 		const directory = packageDirectory(modulesDir, name);
 		if (!directory) continue;
 		for (const dependency of packageDependencyNames(directory)) {
-			if (names.has(dependency) || !packageDirectory(modulesDir, dependency)) continue;
+			if (names.has(dependency) || installerExcludesPackage(dependency)) continue;
+			if (!packageDirectory(modulesDir, dependency)) continue;
 			names.add(dependency);
 			pending.push(dependency);
 		}
@@ -162,7 +170,8 @@ export function expandPackageClosure(modulesDir, roots) {
 		const directory = packageDirectory(modulesDir, name);
 		if (!directory) continue;
 		for (const dependency of packageDependencyNames(directory)) {
-			if (names.has(dependency) || !packageDirectory(modulesDir, dependency)) continue;
+			if (names.has(dependency) || installerExcludesPackage(dependency)) continue;
+			if (!packageDirectory(modulesDir, dependency)) continue;
 			names.add(dependency);
 			pending.push(dependency);
 		}

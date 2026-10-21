@@ -79,6 +79,21 @@ function createFixture(): RuntimeFixture {
 	fs.mkdirSync(path.join(modulesDir, "mdn-data"));
 	fs.writeFileSync(path.join(modulesDir, "mdn-data", "package.json"), JSON.stringify({ name: "mdn-data" }));
 
+	const nextCompiled = path.join(
+		modulesDir,
+		"next",
+		"dist",
+		"compiled",
+		"react-server-dom-turbopack-experimental",
+		"cjs",
+	);
+	fs.mkdirSync(nextCompiled, { recursive: true });
+	fs.writeFileSync(path.join(modulesDir, "next", "package.json"), JSON.stringify({ name: "next" }));
+	fs.writeFileSync(
+		path.join(nextCompiled, "react-server-dom-turbopack-client.browser.development.js"),
+		"export const server = true;\n",
+	);
+
 	return {
 		root,
 		runtime: path.join(root, "runtime"),
@@ -205,6 +220,7 @@ it("keeps the external package rules and their runtime closure", () => {
 	});
 	expect(fs.existsSync(path.join(destination, "node_modules", "detect-libc"))).toBe(true);
 	expect(fs.existsSync(path.join(destination, "node_modules", "hono"))).toBe(false);
+	expect(fs.existsSync(path.join(destination, "node_modules", "next"))).toBe(false);
 
 	fs.rmSync(fixture.root, { recursive: true, force: true });
 });
