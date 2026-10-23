@@ -58,7 +58,7 @@ pub(crate) struct DesktopBoot<'a> {
 
 const POLL_INTERVAL: Duration = Duration::from_millis(100);
 const HEALTH_DEADLINE: Duration = Duration::from_secs(180);
-const WEBVIEW_MISSING: &str = "Microsoft Edge WebView2 runtime is not installed; install the Microsoft Edge WebView2 Runtime to run Reactive Resume";
+const WEBVIEW_MISSING: &str = "Microsoft Edge WebView2 runtime is not installed; install the Microsoft Edge WebView2 Runtime to run Fulei Resume";
 const WINDOW_UNAVAILABLE: &str = "the startup window could not be created";
 
 pub(crate) fn start(boot: &mut DesktopBoot<'_>) -> BootOutcome {
@@ -200,7 +200,7 @@ impl SingleInstance {
         match options.open(path) {
             Ok(file) => Ok(Self { _file: file }),
             Err(error) if is_already_running(&error) => {
-                Err("Reactive Resume is already running; close the other window first".to_string())
+                Err("Fulei Resume is already running; close the other window first".to_string())
             }
             Err(error) => Err(format!("could not lock the desktop instance: {error}")),
         }
@@ -390,7 +390,7 @@ mod tests {
         }
 
         fn exe(&self) -> PathBuf {
-            self.install().join("Reactive Resume.exe")
+            self.install().join("Fulei Resume.exe")
         }
 
         fn app_data(&self) -> PathBuf {
@@ -827,7 +827,7 @@ mod tests {
             .expect("hold the instance lock");
 
         let report = boot_without_spawn(&fixture);
-        let reason = "Reactive Resume is already running; close the other window first";
+        let reason = "Fulei Resume is already running; close the other window first";
         assert_presented_in_the_window(&report, &fixture, reason);
         assert!(report.stopped.is_empty());
         drop(held);

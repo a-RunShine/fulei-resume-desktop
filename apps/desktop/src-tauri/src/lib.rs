@@ -499,7 +499,7 @@ fn exit_after_startup_failure() -> ! {
 fn show_native_message(reason: &str) {
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_OK};
-    let title: Vec<u16> = std::ffi::OsStr::new("Reactive Resume")
+    let title: Vec<u16> = std::ffi::OsStr::new("Fulei Resume")
         .encode_wide()
         .chain(std::iter::once(0))
         .collect();
@@ -520,7 +520,7 @@ fn show_native_message(reason: &str) {
 fn desktop_app_data() -> Result<PathBuf, String> {
     let local_app_data =
         std::env::var("LOCALAPPDATA").map_err(|_| "LOCALAPPDATA is not set".to_string())?;
-    Ok(PathBuf::from(local_app_data).join("Reactive Resume"))
+    Ok(PathBuf::from(local_app_data).join("Fulei Resume"))
 }
 
 struct SystemClock;
@@ -664,7 +664,7 @@ impl GuiSurface {
             let parsed = startup_data_url(&status).parse().expect("startup url");
             let mut builder =
                 tauri::WebviewWindowBuilder::new(&app, "main", tauri::WebviewUrl::External(parsed))
-                    .title("Reactive Resume")
+                    .title("Fulei Resume")
                     .inner_size(1440.0, 900.0)
                     .resizable(true);
             if let Some(args) = browser_args() {
@@ -752,7 +752,7 @@ impl StartupSurface for GuiSurface {
 
 fn startup_document(status: &str) -> String {
     format!(
-        "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Reactive Resume</title></head><body><p id=\"status\">{status}</p></body></html>"
+        "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Fulei Resume</title></head><body><p id=\"status\">{status}</p></body></html>"
     )
 }
 
