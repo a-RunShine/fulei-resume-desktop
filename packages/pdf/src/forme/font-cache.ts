@@ -5,6 +5,8 @@ import ibmPlexSerif600 from "../../font-cache/ibm-plex-serif-600.ttf?url";
 import ibmPlexSerif700 from "../../font-cache/ibm-plex-serif-700.ttf?url";
 import notoSerif400 from "../../font-cache/noto-serif-400.ttf?url";
 import notoSerif700 from "../../font-cache/noto-serif-700.ttf?url";
+import notoSerifSc400 from "../../font-cache/noto-serif-sc-400.ttf?url";
+import notoSerifSc700 from "../../font-cache/noto-serif-sc-700.ttf?url";
 
 const shippedFonts = new Map<string, string>([
 	["IBM Plex Serif:400:false", ibmPlexSerif400],
@@ -13,6 +15,8 @@ const shippedFonts = new Map<string, string>([
 	["IBM Plex Serif:700:false", ibmPlexSerif700],
 	["Noto Serif:400:false", notoSerif400],
 	["Noto Serif:700:false", notoSerif700],
+	["Noto Serif SC:400:false", notoSerifSc400],
+	["Noto Serif SC:700:false", notoSerifSc700],
 ]);
 
 const faceKey = (request: PdfFontRequest) => `${request.family}:${request.weight}:${request.italic}`;

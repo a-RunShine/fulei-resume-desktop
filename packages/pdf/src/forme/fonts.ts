@@ -75,11 +75,14 @@ const localFont = async (request: PdfFontRequest, readLocal: LocalFontReader) =>
 	return prepareFontBytes(bytes);
 };
 
+const localOrDownload = (request: PdfFontRequest, readLocal: LocalFontReader) =>
+	localFont(request, readLocal).catch(() => downloadFont(request.src));
+
 const load = (request: PdfFontRequest, readLocal?: LocalFontReader) => {
 	const key = readLocal ? `local:${request.family}:${request.weight}:${request.italic}` : request.src;
 	let bytes = cache.get(key);
 	if (!bytes) {
-		bytes = readLocal ? localFont(request, readLocal) : downloadFont(request.src);
+		bytes = readLocal ? localOrDownload(request, readLocal) : downloadFont(request.src);
 		bytes.catch(() => cache.delete(key));
 		cache.set(key, bytes);
 	}

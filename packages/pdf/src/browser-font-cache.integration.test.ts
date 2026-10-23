@@ -82,3 +82,68 @@ it("names the missing font and returns no PDF when the cache does not have it", 
 		"Fonts could not be loaded: Roboto, Noto Sans",
 	);
 });
+
+it("exports a Chinese resume in its own locale while non-local hosts are blocked", { timeout: 60_000 }, async () => {
+	blockNonLocalHosts();
+	const data = resume();
+	data.metadata.page.locale = "zh-CN";
+	data.basics.name = "张伟";
+	data.summary.content = "<p>构建可靠的桌面软件。</p>";
+
+	let blob: Blob | undefined;
+	await act(async () => {
+		blob = await createResumePdfBlob({ data });
+	});
+	if (!blob) throw new Error("export returned no PDF");
+	vi.unstubAllGlobals();
+
+	const text = await pdfText(blob);
+	expect(text).toContain("张伟");
+	expect(text).toContain("构建可靠的桌面软件");
+});
+
+it("downloads a face the shipped cache does not carry", { timeout: 60_000 }, async () => {
+	const requested: string[] = [];
+	const realFetch = globalThis.fetch.bind(globalThis);
+	vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+		const href = requestHref(input);
+		const file = localFile(href);
+		if (file) {
+			const type = file.endsWith(".wasm") ? "application/wasm" : "application/octet-stream";
+			return Promise.resolve(new Response(readFileSync(file), { headers: { "content-type": type } }));
+		}
+		requested.push(href);
+		return realFetch(input, init);
+	});
+
+	const data = resume();
+	data.metadata.page.locale = "zh-TW";
+	data.summary.content = "<p>建立可靠的桌面軟體。</p>";
+
+	let blob: Blob | undefined;
+	await act(async () => {
+		blob = await createResumePdfBlob({ data });
+	});
+	vi.unstubAllGlobals();
+	expect(blob).toBeDefined();
+	expect(requested.some((href) => href.includes("fonts.gstatic"))).toBe(true);
+});
+
+it("reads a shipped face without touching the network", { timeout: 60_000 }, async () => {
+	const requested: string[] = [];
+	const realFetch = globalThis.fetch.bind(globalThis);
+	vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+		const href = requestHref(input);
+		const file = localFile(href);
+		if (file) {
+			const type = file.endsWith(".wasm") ? "application/wasm" : "application/octet-stream";
+			return Promise.resolve(new Response(readFileSync(file), { headers: { "content-type": type } }));
+		}
+		requested.push(href);
+		return realFetch(input, init);
+	});
+
+	await act(async () => createResumePdfBlob({ data: resume() }));
+	vi.unstubAllGlobals();
+	expect(requested.filter((href) => href.includes("fonts.gstatic"))).toHaveLength(0);
+});
