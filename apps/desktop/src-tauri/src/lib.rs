@@ -653,17 +653,17 @@ impl GuiSurface {
         }
     }
 
-    fn open(&mut self, status: &str) -> bool {
+    fn open(&mut self, stage: &str) -> bool {
         if self.attempted {
             return self.window_exists();
         }
         self.attempted = true;
-        let status = status.to_string();
+        let stage = stage.to_string();
         let app = self.app.clone();
         let window = Arc::clone(&self.window);
         let ready = Arc::clone(&self.ready);
         let queued = self.app.run_on_main_thread(move || {
-            let parsed = startup_data_url(&status).parse().expect("startup url");
+            let parsed = startup_data_url(&stage, "").parse().expect("startup url");
             let mut builder =
                 tauri::WebviewWindowBuilder::new(&app, "main", tauri::WebviewUrl::External(parsed))
                     .title("Fulei Resume")
@@ -695,18 +695,32 @@ impl GuiSurface {
             .unwrap_or(false)
     }
 
-    fn update_status(&self, status: &str) -> bool {
-        let status = status.to_string();
+    fn show_reason(&self, reason: &str) -> bool {
+        let quote =
+            |value: &str| serde_json::to_string(value).unwrap_or_else(|_| "\"\"".to_string());
+        let reason = quote(reason);
+        let window = Arc::clone(&self.window);
+        self.app
+            .run_on_main_thread(move || {
+                let guard = window.lock().expect("window");
+                if let Some(window) = guard.as_ref() {
+                    let _ = window.eval(format!(
+                        "document.body.className = 'failed'; document.querySelector('.reason').textContent = {reason};"
+                    ));
+                }
+            })
+            .is_ok()
+    }
+    fn update_status(&self, stage: &str) -> bool {
+        let stage = stage.to_string();
         let window = Arc::clone(&self.window);
         self.app
             .run_on_main_thread(move || {
                 let guard = window.lock().expect("window");
                 if let Some(window) = guard.as_ref() {
                     let quoted =
-                        serde_json::to_string(&status).unwrap_or_else(|_| "\"\"".to_string());
-                    let _ = window.eval(format!(
-                        "document.getElementById('status').textContent = {quoted}"
-                    ));
+                        serde_json::to_string(&stage).unwrap_or_else(|_| "\"\"".to_string());
+                    let _ = window.eval(format!("document.body.className = {quoted}"));
                 }
             })
             .is_ok()
@@ -727,7 +741,7 @@ impl StartupSurface for GuiSurface {
         if !self.open(reason) {
             return BootOutcome::FailedWithoutWindow;
         }
-        if created_now || self.update_status(reason) {
+        if created_now || self.show_reason(reason) {
             BootOutcome::FailedInWindow
         } else {
             BootOutcome::FailedWithoutWindow
@@ -752,15 +766,48 @@ impl StartupSurface for GuiSurface {
     }
 }
 
-fn startup_document(status: &str) -> String {
-    format!(
-        "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Fulei Resume</title></head><body><p id=\"status\">{status}</p></body></html>"
-    )
+const SPLASH_MARK: &str = r##"<svg class="mark" viewBox="0 0 100 100" role="img" aria-label="Fulei Resume">
+<rect x="0" y="0" width="100" height="100" rx="26" fill="#337344"/>
+<rect x="17" y="9" width="56" height="74" rx="13" fill="#FEFDFC"/>
+<line x1="27" y1="25" x2="46" y2="25" stroke="#337344" stroke-width="5.5" stroke-linecap="round"/>
+<line x1="27" y1="36" x2="60" y2="36" stroke="#337344" stroke-width="4" stroke-linecap="round" opacity="0.45"/>
+<rect x="27" y="55" width="10" height="18" rx="5" fill="#337344" opacity="0.35"/>
+<rect x="41" y="46" width="10" height="27" rx="5" fill="#337344" opacity="0.65"/>
+<rect x="55" y="37" width="10" height="36" rx="5" fill="#337344"/>
+<path d="M78 8 L81.5 16 L90 17.2 L83.8 22.4 L86.2 30.5 L78 25.8 L69.8 30.5 L72.2 22.4 L66 17.2 L74.5 16 Z" fill="#F8F7F3" stroke="#337344" stroke-width="2.2" stroke-linejoin="round"/>
+</svg>"##;
+
+const SPLASH_TEMPLATE: &str = r##"<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><title>Fulei Resume</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:#F8F7F3;display:grid;place-items:center;overflow:hidden;font-family:"PingFang SC","Microsoft YaHei","Noto Sans SC",sans-serif}
+.stage{display:flex;flex-direction:column;align-items:center;gap:26px;opacity:0;animation:markIn .5s ease-out forwards}
+.mark{width:132px;height:132px;display:block;animation:breathe 2.4s ease-in-out infinite}
+.wordmark{font-family:"Songti SC","SimSun","Noto Serif SC",Georgia,serif;font-size:34px;letter-spacing:.5px;color:#337344;white-space:nowrap}
+.spinner{width:28px;height:28px;border-radius:50%;border:3px solid rgba(51,115,68,.18);border-top-color:#337344;animation:spin .8s linear infinite}
+.launching .spinner{border-top-color:#2a5f38;animation-duration:.45s}
+.launching .mark{animation-duration:1.4s}
+.reason{display:none;max-width:min(78vw,720px);color:#9a3412;font-size:14px;line-height:1.6;text-align:center;word-break:break-word}
+.failed .spinner{display:none}
+.failed .reason{display:block}
+.failed .mark{animation:none;opacity:1}
+@keyframes markIn{to{opacity:1}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+</style></head>
+<body class="__STAGE__"><div class="stage">__MARK__<div class="wordmark">Fulei Resume</div><div class="spinner" role="progressbar" aria-label="Loading"></div><p class="reason">__REASON__</p></div></body></html>"##;
+
+fn startup_document(stage: &str, reason: &str) -> String {
+    SPLASH_TEMPLATE
+        .replace("__MARK__", SPLASH_MARK)
+        .replace("__STAGE__", stage)
+        .replace("__REASON__", reason)
 }
 
-fn startup_data_url(status: &str) -> String {
+fn startup_data_url(stage: &str, reason: &str) -> String {
     let mut encoded = String::from("data:text/html;charset=utf-8,");
-    for byte in startup_document(status).bytes() {
+    for byte in startup_document(stage, reason).bytes() {
         match byte {
             b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
                 encoded.push(byte as char)

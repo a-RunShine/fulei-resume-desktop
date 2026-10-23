@@ -88,7 +88,7 @@ fn run(boot: &mut DesktopBoot<'_>) -> Result<(), String> {
     if port_is_busy(boot.port) {
         return Err(format!("port {} is already in use", boot.port));
     }
-    let windowed = boot.surface.show_local("Preparing the runtime");
+    let windowed = boot.surface.show_local("preparing");
     let evergreen = boot.browser.evergreen_installed();
     if !evergreen {
         boot.surface.report_without_window(WEBVIEW_MISSING);
@@ -115,7 +115,7 @@ fn run(boot: &mut DesktopBoot<'_>) -> Result<(), String> {
         &index,
         &format!("web build is missing: {}", index.display()),
     )?;
-    boot.surface.show_local("Starting the app");
+    boot.surface.show_local("launching");
     let data_dir = boot.app_data.join("data");
     std::fs::create_dir_all(&data_dir).map_err(|error| error.to_string())?;
     let pid = boot.processes.spawn_server(&ServerLaunch {
@@ -688,8 +688,8 @@ mod tests {
         assert_eq!(
             report.events,
             vec![
-                "show:Preparing the runtime".to_string(),
-                "show:Starting the app".to_string(),
+                "show:preparing".to_string(),
+                "show:launching".to_string(),
                 "spawn".to_string(),
                 format!("navigate:http://127.0.0.1:{}/desktop/enter", fixture.port),
             ]
@@ -803,7 +803,7 @@ mod tests {
         assert_eq!(
             report.events,
             vec![
-                "show:Preparing the runtime".to_string(),
+                "show:preparing".to_string(),
                 format!("native:{WEBVIEW_MISSING}"),
                 format!("failure:{WEBVIEW_MISSING}"),
             ]
@@ -847,7 +847,7 @@ mod tests {
         let shown = report
             .events
             .iter()
-            .position(|event| event == "show:Preparing the runtime")
+            .position(|event| event == "show:preparing")
             .expect("the startup page was created");
         let failed = report
             .events
