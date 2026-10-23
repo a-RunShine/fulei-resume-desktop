@@ -421,6 +421,8 @@ pub fn run() {
     let server_pid = Arc::new(Mutex::new(None));
     let setup_pid = Arc::clone(&server_pid);
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .invoke_handler(tauri::generate_handler![
             save_resume_pdf,
             list_resumes,

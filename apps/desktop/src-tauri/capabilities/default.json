@@ -2,5 +2,13 @@
 	"identifier": "default",
 	"description": "Default capability for the desktop window",
 	"windows": ["main"],
-	"permissions": ["core:default"]
+	"permissions": [
+		"core:default",
+		"dialog:allow-save",
+		"fs:allow-write-file",
+		{
+			"identifier": "fs:scope",
+			"allow": [{ "path": "**" }]
+		}
+	]
 }
