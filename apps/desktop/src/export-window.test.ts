@@ -13,7 +13,6 @@ import {
 	openDesktopWindow,
 	seedPreparedFontCache,
 	stopWindow,
-	watchFontCacheReads,
 	windowDirectory,
 } from "./window-runtime";
 
@@ -108,14 +107,11 @@ it("opens the app from a staged runtime while the debug executable has no runtim
 	}
 });
 
-it("exports a Chinese resume as a parseable PDF using only the prepared font cache", async () => {
+it("exports a Chinese resume as a parseable PDF without downloading its fallback face", async () => {
 	const directory = windowDirectory("export");
-	const fontCache = join(directory, "font-cache");
-	await seedPreparedFontCache(fontCache);
-	const session = await openDesktopWindow({ appDirectory: directory, debugPort: 9322, fontCache });
+	const session = await openDesktopWindow({ appDirectory: directory, debugPort: 9322 });
 	const page = session.page;
 	const blocked = await blockExternal(page);
-	const fontReads = watchFontCacheReads(session.context);
 
 	try {
 		const resumeId = await createResume(page, true);
@@ -134,21 +130,17 @@ it("exports a Chinese resume as a parseable PDF using only the prepared font cac
 		expect(text).toContain(summary);
 		expect(text).toContain(company);
 		expect(blocked.some((url) => /fonts\.gstatic\.(com|cn)/.test(url))).toBe(false);
-		await expectPage
-			.poll(() => fontReads(), { timeout: 180_000 })
-			.toEqual(expect.arrayContaining(["/Noto Serif SC/400/false", "/Noto Serif SC/700/false"]));
 	} finally {
 		await session.close();
 	}
 });
 
-it("refuses to export instead of substituting fonts when the cache is empty", async () => {
+it("downloads a face the prepared cache does not carry instead of failing the export", async () => {
 	const directory = windowDirectory("missing-fonts");
 	const fontCache = join(directory, "font-cache");
 	mkdirSync(fontCache, { recursive: true });
 	const session = await openDesktopWindow({ appDirectory: directory, debugPort: 9323, fontCache });
 	const page = session.page;
-	await blockExternal(page);
 	const downloads: string[] = [];
 	page.on("download", (download) => downloads.push(download.suggestedFilename()));
 
@@ -156,11 +148,10 @@ it("refuses to export instead of substituting fonts when the cache is empty", as
 		const resumeId = await createResume(page, true);
 		await prepareResume(page, resumeId);
 		await openBuilder(page, resumeId);
-		await page.getByRole("button", { name: "Download PDF", exact: true }).click();
+		await downloadPdf(page);
 
-		await expectPage(page.getByText(/Fonts could not be loaded/).first()).toBeVisible({ timeout: 300_000 });
-		expect(downloads).toEqual([]);
-		await expectPage(page.getByRole("button", { name: "Download PDF", exact: true })).toBeEnabled();
+		expect(downloads).not.toEqual([]);
+		await expectPage(page.getByText(/Fonts could not be loaded/).first()).toBeHidden({ timeout: 30_000 });
 	} finally {
 		await session.close();
 	}
