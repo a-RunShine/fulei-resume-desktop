@@ -94,6 +94,14 @@ function createFixture(): RuntimeFixture {
 		"export const server = true;\n",
 	);
 
+	const formePkgNode = path.join(modulesDir, "@formepdf", "core", "pkg-node");
+	fs.mkdirSync(formePkgNode, { recursive: true });
+	fs.writeFileSync(
+		path.join(modulesDir, "@formepdf", "core", "package.json"),
+		JSON.stringify({ name: "@formepdf/core" }),
+	);
+	fs.writeFileSync(path.join(formePkgNode, "forme_bg.wasm"), "forme-engine");
+
 	return {
 		root,
 		runtime: path.join(root, "runtime"),
@@ -191,6 +199,21 @@ it("checks the runtime layout the startup side requires", () => {
 	fs.rmSync(path.join(fixture.runtime, "web", "dist", "index.html"));
 	expect(() => verifyRuntimeLayout(fixture.runtime)).toThrow(/index\.html/);
 
+	stageFixture(fixture);
+	fs.rmSync(path.join(fixture.runtime, "server", "forme_bg.wasm"));
+	expect(() => verifyRuntimeLayout(fixture.runtime)).toThrow(/forme_bg\.wasm/);
+
+	fs.rmSync(fixture.root, { recursive: true, force: true });
+});
+
+it("copies the PDF engine beside the server entry so the server can render", () => {
+	const fixture = createFixture();
+	stageFixture(fixture);
+
+	const staged = path.join(fixture.runtime, "server", "forme_bg.wasm");
+	expect(fs.existsSync(staged)).toBe(true);
+	expect(fs.readFileSync(staged, "utf8")).toBe("forme-engine");
+
 	fs.rmSync(fixture.root, { recursive: true, force: true });
 });
 
@@ -208,7 +231,15 @@ it("reports imported external packages missing from the server directory", () =>
 it("keeps the external package rules and their runtime closure", () => {
 	const fixture = createFixture();
 	expect(externalPackageNames(fixture.modulesDir).sort()).toEqual(
-		["@electric-sql/pglite", "@img/sharp-win32-x64", "css-tree", "detect-libc", "mdn-data", "sharp"].sort(),
+		[
+			"@electric-sql/pglite",
+			"@formepdf/core",
+			"@img/sharp-win32-x64",
+			"css-tree",
+			"detect-libc",
+			"mdn-data",
+			"sharp",
+		].sort(),
 	);
 
 	const destination = path.join(fixture.root, "server-only");
