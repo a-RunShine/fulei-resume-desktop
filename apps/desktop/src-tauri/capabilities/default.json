@@ -2,6 +2,9 @@
 	"identifier": "default",
 	"description": "Default capability for the desktop window",
 	"windows": ["main"],
+	"remote": {
+		"urls": ["http://127.0.0.1:*", "http://localhost:*"]
+	},
 	"permissions": [
 		"core:default",
 		"dialog:allow-save",

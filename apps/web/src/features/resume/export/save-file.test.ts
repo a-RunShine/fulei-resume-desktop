@@ -1,3 +1,5 @@
+// @vitest-environment happy-dom
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { detectionRuntime, saveFile } from "./save-file";
 
@@ -18,7 +20,7 @@ describe("detectionRuntime", () => {
 	it("reports the browser runtime otherwise", () => {
 		expect(detectionRuntime({})).toBe("browser");
 		expect(detectionRuntime(undefined)).toBe("browser");
-		expect(detectionRuntime({ __TAURI_INTERNALS__: undefined })).toBe("desktop");
+		expect(detectionRuntime(null)).toBe("browser");
 	});
 });
 
@@ -41,20 +43,18 @@ describe("saveFile", () => {
 		expect(download).not.toHaveBeenCalled();
 	});
 
-	it("treats a cancelled dialog as nothing to report", async () => {
-		const dialog = vi.fn(async () => {
-			throw new Error("dialog cancelled by the user");
-		});
+	it("resolves without a browser download when the user cancels", async () => {
+		const dialog = vi.fn(async () => undefined);
 
 		await expect(saveFile(target(), "desktop", dialog)).resolves.toBeUndefined();
 		expect(download).not.toHaveBeenCalled();
 	});
 
-	it("reports a real dialog failure", async () => {
+	it("surfaces a genuine write failure instead of swallowing it", async () => {
 		const dialog = vi.fn(async () => {
-			throw new Error("permission denied");
+			throw new Error("operation aborted");
 		});
 
-		await expect(saveFile(target(), "desktop", dialog)).rejects.toThrow(/permission denied/);
+		await expect(saveFile(target(), "desktop", dialog)).rejects.toThrow(/operation aborted/);
 	});
 });

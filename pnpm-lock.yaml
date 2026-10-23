@@ -191,6 +191,9 @@ catalogs:
     '@orpc/server':
       specifier: ^1.15.6
       version: 1.15.6
+    '@tauri-apps/api':
+      specifier: ^2.12.3
+      version: 2.12.3
     '@tauri-apps/plugin-dialog':
       specifier: ^2.8.3
       version: 2.8.3
@@ -790,6 +793,9 @@ importers:
       '@tanstack/react-router':
         specifier: ^1.170.44
         version: 1.170.44(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@tauri-apps/api':
+        specifier: 'catalog:'
+        version: 2.12.3
       '@tauri-apps/plugin-dialog':
         specifier: 'catalog:'
         version: 2.8.3

@@ -11,7 +11,6 @@ type BundleConfig = {
 	active?: boolean;
 	targets?: string[];
 	resources?: Record<string, string>;
-	icon?: string[];
 	windows?: {
 		webviewInstallMode?: { type?: string };
 		nsis?: { installMode?: string; installerHooks?: string };

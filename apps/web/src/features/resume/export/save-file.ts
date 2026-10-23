@@ -10,14 +10,15 @@ export type SaveDestination = "desktop" | "browser";
 export const detectionRuntime = (scope: unknown): SaveDestination =>
 	typeof scope === "object" && scope !== null && "__TAURI_INTERNALS__" in scope ? "desktop" : "browser";
 
-const isCancellation = (error: unknown) => error instanceof Error && /cancel|abort|user denied/i.test(error.message);
-
 const saveThroughDialog = async ({ suggestedName, blob }: SaveTarget) => {
-	const [{ save }, { writeFile }] = await Promise.all([
+	const [{ save }, { writeFile }, { downloadDir, join }] = await Promise.all([
 		import("@tauri-apps/plugin-dialog"),
 		import("@tauri-apps/plugin-fs"),
+		import("@tauri-apps/api/path"),
 	]);
-	const path = await save({ defaultPath: suggestedName });
+	const directory = await downloadDir().catch(() => null);
+	const defaultPath = directory ? await join(directory, suggestedName) : suggestedName;
+	const path = await save({ defaultPath });
 	if (!path) return;
 	await writeFile(path, new Uint8Array(await blob.arrayBuffer()));
 };
@@ -32,10 +33,5 @@ export async function saveFile(
 		return;
 	}
 
-	try {
-		await dialog(target);
-	} catch (error) {
-		if (isCancellation(error)) return;
-		throw error;
-	}
+	await dialog(target);
 }

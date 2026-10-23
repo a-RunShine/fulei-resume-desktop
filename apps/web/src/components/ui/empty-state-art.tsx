@@ -4,7 +4,7 @@ export type EmptyStateArtVariant = "assistant" | "career" | "applications";
 
 type EmptyStateArtProps = {
 	variant: EmptyStateArtVariant;
-	size?: number;
+	size: number;
 	className?: string;
 };
 
@@ -65,18 +65,9 @@ const artByVariant = {
 	applications: applicationsArt,
 } satisfies Record<EmptyStateArtVariant, ReactElement>;
 
-const defaultSize = { assistant: 120, career: 120, applications: 96 };
-
 export function EmptyStateArt({ variant, size, className }: EmptyStateArtProps) {
 	return (
-		<svg
-			width={size ?? defaultSize[variant]}
-			height={size ?? defaultSize[variant]}
-			viewBox="0 0 120 120"
-			fill="none"
-			aria-hidden="true"
-			className={className}
-		>
+		<svg width={size} height={size} viewBox="0 0 120 120" fill="none" aria-hidden="true" className={className}>
 			{artByVariant[variant]}
 		</svg>
 	);

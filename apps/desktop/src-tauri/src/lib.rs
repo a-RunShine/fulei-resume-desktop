@@ -6,7 +6,6 @@ use serde::Serialize;
 use startup::{
     BootOutcome, BrowserHost, Clock, DesktopBoot, ProcessHost, ServerLaunch, StartupSurface,
 };
-use tauri::Manager;
 
 mod local_api;
 mod startup;
@@ -25,17 +24,14 @@ fn new_resume_id() -> String {
     format!("{nanos:x}")
 }
 
-fn database_path(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+fn database_path(_app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
     if let Ok(path) = std::env::var("REACTIVE_RESUME_DB") {
         let trimmed = path.trim();
         if !trimmed.is_empty() {
             return Ok(std::path::PathBuf::from(trimmed));
         }
     }
-    let directory = app
-        .path()
-        .app_data_dir()
-        .map_err(|error| error.to_string())?;
+    let directory = desktop_app_data()?;
     std::fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
     Ok(directory.join("resumes.sqlite"))
 }
@@ -663,7 +659,7 @@ impl GuiSurface {
         let window = Arc::clone(&self.window);
         let ready = Arc::clone(&self.ready);
         let queued = self.app.run_on_main_thread(move || {
-            let parsed = startup_data_url(&stage, "").parse().expect("startup url");
+            let parsed = startup_data_url(&stage).parse().expect("startup url");
             let mut builder =
                 tauri::WebviewWindowBuilder::new(&app, "main", tauri::WebviewUrl::External(parsed))
                     .title("Fulei Resume")
@@ -737,11 +733,10 @@ impl StartupSurface for GuiSurface {
     }
 
     fn present_failure(&mut self, reason: &str) -> BootOutcome {
-        let created_now = !self.attempted;
-        if !self.open(reason) {
+        if !self.open("preparing") {
             return BootOutcome::FailedWithoutWindow;
         }
-        if created_now || self.show_reason(reason) {
+        if self.show_reason(reason) {
             BootOutcome::FailedInWindow
         } else {
             BootOutcome::FailedWithoutWindow
@@ -798,16 +793,15 @@ body{background:#F8F7F3;display:grid;place-items:center;overflow:hidden;font-fam
 </style></head>
 <body class="__STAGE__"><div class="stage">__MARK__<div class="wordmark">Fulei Resume</div><div class="spinner" role="progressbar" aria-label="Loading"></div><p class="reason">__REASON__</p></div></body></html>"##;
 
-fn startup_document(stage: &str, reason: &str) -> String {
+fn startup_document(stage: &str) -> String {
     SPLASH_TEMPLATE
         .replace("__MARK__", SPLASH_MARK)
         .replace("__STAGE__", stage)
-        .replace("__REASON__", reason)
 }
 
-fn startup_data_url(stage: &str, reason: &str) -> String {
+fn startup_data_url(stage: &str) -> String {
     let mut encoded = String::from("data:text/html;charset=utf-8,");
-    for byte in startup_document(stage, reason).bytes() {
+    for byte in startup_document(stage).bytes() {
         match byte {
             b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
                 encoded.push(byte as char)

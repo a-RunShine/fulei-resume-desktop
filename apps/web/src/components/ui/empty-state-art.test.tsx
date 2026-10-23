@@ -8,7 +8,7 @@ const variants: EmptyStateArtVariant[] = ["assistant", "career", "applications"]
 
 describe("EmptyStateArt", () => {
 	it.each(variants)("renders an svg for the %s empty state", (variant) => {
-		const { container } = render(<EmptyStateArt variant={variant} />);
+		const { container } = render(<EmptyStateArt variant={variant} size={96} />);
 		const svg = container.querySelector("svg");
 		expect(svg).not.toBeNull();
 		expect(svg?.getAttribute("viewBox")).toBe("0 0 120 120");
@@ -16,7 +16,7 @@ describe("EmptyStateArt", () => {
 	});
 
 	it.each(variants)("draws the %s art with theme tokens rather than fixed colours", (variant) => {
-		const { container } = render(<EmptyStateArt variant={variant} />);
+		const { container } = render(<EmptyStateArt variant={variant} size={96} />);
 		const markup = container.innerHTML;
 
 		expect(markup).toContain("var(--ink-2)");
@@ -24,15 +24,10 @@ describe("EmptyStateArt", () => {
 		expect(markup).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
 	});
 
-	it("lets the caller override the size", () => {
-		const { container } = render(<EmptyStateArt variant="assistant" size={64} />);
+	it.each(variants)("renders the %s art at the requested size", (variant) => {
+		const { container } = render(<EmptyStateArt variant={variant} size={64} />);
 		const svg = container.querySelector("svg");
 		expect(svg?.getAttribute("width")).toBe("64");
 		expect(svg?.getAttribute("height")).toBe("64");
-	});
-
-	it("defaults applications smaller than the conversation panels", () => {
-		const { container } = render(<EmptyStateArt variant="applications" />);
-		expect(container.querySelector("svg")?.getAttribute("width")).toBe("96");
 	});
 });
