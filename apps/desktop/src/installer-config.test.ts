@@ -11,6 +11,7 @@ type BundleConfig = {
 	active?: boolean;
 	targets?: string[];
 	resources?: Record<string, string>;
+	icon?: string[];
 	windows?: {
 		webviewInstallMode?: { type?: string };
 		nsis?: { installMode?: string; installerHooks?: string };
@@ -47,6 +48,16 @@ it("names the main binary like the product while keeping the frontend build", ()
 	expect(config.mainBinaryName).toBe("Fulei Resume");
 	expect(config.build?.frontendDist).toBe("../../web/dist");
 	expect(config.build?.beforeBuildCommand).toBeTruthy();
+});
+
+it("ships the generated icon set so the installer and taskbar show the brand mark", () => {
+	const icons = fs.readdirSync(path.join(srcTauriDir, "icons"));
+	expect(icons).toContain("icon.ico");
+	expect(icons).not.toContain("android");
+	expect(icons).not.toContain("ios");
+
+	const ico = fs.statSync(path.join(srcTauriDir, "icons", "icon.ico"));
+	expect(ico.size).toBeGreaterThan(4096);
 });
 
 it("maps the staged runtime to the install root so node, server and web sit beside the executable", () => {
