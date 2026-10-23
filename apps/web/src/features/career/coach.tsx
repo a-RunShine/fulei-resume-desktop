@@ -41,6 +41,7 @@ import {
 } from "./coach-thread";
 import { CareerLoadError } from "./load-state";
 import { ContextChip, Eyebrow, PrivacyLine } from "./shared";
+import { EmptyStateArt } from "@/components/ui/empty-state-art";
 import { transcriptOf, useConversationConnection } from "@/features/assistant/chat";
 import { ProviderSetup } from "@/features/assistant/provider-setup";
 import { AiProviderLoadState } from "@/features/settings/integrations/ai-provider-load-state";
@@ -465,6 +466,7 @@ function EmptyState({ disabled, onPick }: EmptyStateProps) {
 	];
 	return (
 		<div className="grid gap-6 pt-[clamp(0px,6vh,48px)]">
+			<EmptyStateArt variant="career" size={104} />
 			<div className="grid gap-3">
 				<h3 className="font-display text-[30px] leading-9 font-medium">
 					<Trans>What are you working on?</Trans>

@@ -18,6 +18,7 @@ import { Skeleton } from "@reactive-resume/ui/components/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@reactive-resume/ui/components/tabs";
 import { useBreakpoint } from "@reactive-resume/ui/hooks/use-breakpoint";
 import { cn } from "@reactive-resume/utils/style";
+import { EmptyStateArt } from "@/components/ui/empty-state-art";
 import { AddApplicationDialog } from "@/features/applications/components/add-application-dialog";
 import { ApplicationDetailSheet } from "@/features/applications/components/application-detail-sheet";
 import { ApplicationFormSheet } from "@/features/applications/components/application-form-sheet";
@@ -364,9 +365,7 @@ function FollowUpNudge({ applications, onOpen }: { applications: Application[]; 
 function EmptyState({ onAdd, onImport }: { onAdd: () => void; onImport: () => void }) {
 	return (
 		<div className="grid justify-items-center gap-3 py-20 text-center transition-[opacity,translate] duration-emphasized ease-enter starting:translate-y-2 starting:opacity-0">
-			<span className="grid size-12 place-items-center rounded-xl bg-sunken text-ink-2">
-				<Icon name="briefcase" size={26} />
-			</span>
+			<EmptyStateArt variant="applications" size={96} />
 			<h2 className="text-lg font-semibold">
 				<Trans>Track your first job</Trans>
 			</h2>
