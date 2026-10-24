@@ -23,12 +23,12 @@ export const Route = createFileRoute("/_home/")({
 		const root = loaderData?.root;
 		if (root && root.status !== "disabled") {
 			if (root.status === "unavailable") {
-				return { meta: [{ title: "Fulei Resume" }, createNoindexFollowMeta()] };
+				return { meta: [{ title: "Reactive Resume" }, createNoindexFollowMeta()] };
 			}
 			const social = getResumeSocialMeta(root.resume.data, root.resume.name || "Resume");
 			return {
 				meta: [
-					{ title: `${social.name} - Fulei Resume` },
+					{ title: `${social.name} - Reactive Resume` },
 					{ name: "description", content: social.description },
 					createNoindexFollowMeta(),
 				],

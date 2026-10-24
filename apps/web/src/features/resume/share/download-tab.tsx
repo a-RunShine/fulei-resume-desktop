@@ -261,13 +261,22 @@ export function DownloadTab({ onReview }: DownloadTabProps) {
 		setState("busy");
 		try {
 			const blob = await createExportFile(resume, as);
-			await downloadFile({ blob, suggestedName: file });
+			const resumeOutcome = await downloadFile({ blob, suggestedName: file });
+			if (resumeOutcome === "cancelled") {
+				setState("idle");
+				return;
+			}
 			if (letterId) {
 				const letter = await client.coverLetters.getById({ id: letterId });
-				await downloadFile({
+				const letterOutcome = await downloadFile({
 					blob: await createLetterFile(letter, as),
 					suggestedName: `${letterFileName(letter)}${extension}`,
 				});
+				if (letterOutcome === "cancelled") {
+					toast.add({ description: t`Saved ${file}. The cover letter was not saved.` });
+					setState("done");
+					return;
+				}
 				toast.add({ description: t`Downloaded ${file} and the cover letter` });
 			} else {
 				toast.add({ description: t`Downloaded ${file}` });

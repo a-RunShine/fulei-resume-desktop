@@ -801,7 +801,13 @@ fn record_boot_event(reason: &str) {
     if let Some(parent) = log.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    let _ = std::fs::write(&log, reason);
+    let mut line = reason.to_string();
+    line.push('\n');
+    let _ = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log)
+        .and_then(|mut file| std::io::Write::write_all(&mut file, line.as_bytes()));
 }
 
 const SPLASH_MARK: &str = r##"<svg class="mark" viewBox="0 0 100 100" role="img" aria-label="Fulei Resume">

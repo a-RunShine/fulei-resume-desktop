@@ -23,7 +23,7 @@ export function Header() {
 			className="fixed inset-x-0 top-0 z-50 animate-in border-b border-transparent bg-bg/80 backdrop-blur-lg ease-out-strong animation-duration-300 [transition:translate_250ms_var(--ease-out-strong)] fade-in data-[hidden=true]:-translate-y-full"
 		>
 			<nav aria-label={t`Main navigation`} className="container mx-auto flex items-center gap-x-4 p-3 lg:px-12">
-				<Link to="/" className="transition-opacity hover:opacity-80" aria-label={t`Fulei Resume - Go to homepage`}>
+				<Link to="/" className="transition-opacity hover:opacity-80" aria-label={t`Reactive Resume - Go to homepage`}>
 					<BrandIcon className="size-10" />
 				</Link>
 

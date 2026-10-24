@@ -9,6 +9,8 @@ import { Skeleton } from "@reactive-resume/ui/components/skeleton";
 import { toast } from "@reactive-resume/ui/components/toast";
 import { computeInsights, computeOutcomes, computeTimeline } from "../insights";
 import { getStageColor, getStageLabel } from "../stages";
+import { downloadFile } from "@/features/resume/export/save-file";
+import { getReadableErrorMessage } from "@/libs/error-message";
 import { stagger } from "@/libs/motion";
 import { orpc } from "@/libs/orpc/client";
 
@@ -301,11 +303,15 @@ function PipelineFlow({ insights }: { insights: ReturnType<typeof computeInsight
 			ctx.fillStyle = FLOW_BG;
 			ctx.fillRect(0, 0, canvas.width, canvas.height);
 			ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-			const link = document.createElement("a");
-			link.download = "pipeline-flow.png";
-			link.href = canvas.toDataURL("image/png");
-			link.click();
-			toast.add({ type: "success", description: t`Exported pipeline-flow.png` });
+			void canvas.toBlob(async (blob) => {
+				if (!blob) return;
+				try {
+					const outcome = await downloadFile({ blob, suggestedName: "pipeline-flow.png" });
+					if (outcome === "saved") toast.add({ type: "success", description: t`Exported pipeline-flow.png` });
+				} catch (error) {
+					toast.add({ type: "error", description: getReadableErrorMessage(error, t`Download failed.`) });
+				}
+			}, "image/png");
 		};
 		image.src = svg64;
 	};

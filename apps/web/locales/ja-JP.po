@@ -3107,6 +3107,10 @@ msgstr "履歴書を印刷用に準備できませんでした。もう一度お
 msgid "Could not revoke this connection. Try again."
 msgstr "この接続を取り消すことができませんでした。もう一度やり直してください。"
 
+#: src/features/applications/components/detail/next-step-card.tsx
+msgid "Could not save the calendar file."
+msgstr ""
+
 #: src/dialogs/auth/enable-two-factor.tsx
 msgid "Could not set up two-factor authentication."
 msgstr "二要素認証を設定できませんでした。"
@@ -4105,6 +4109,14 @@ msgstr "応募の詳細、連絡先、メモ、タイムライン履歴を CSV �
 msgid "Download CSV"
 msgstr "CSV をダウンロード"
 
+#: src/dialogs/auth/enable-two-factor.tsx
+#: src/features/applications/components/export-applications-sheet.tsx
+#: src/features/applications/components/import-applications-sheet.tsx
+#: src/features/applications/components/insights-view.tsx
+#: src/features/career/workspace/apply.tsx
+#: src/features/career/workspace/debrief.tsx
+#: src/features/career/workspace/practise.tsx
+#: src/features/career/workspace/shell.tsx
 #: src/features/resume/share/download-tab.tsx
 #: src/routes/builder/letter/-components/share-sheet.tsx
 msgid "Download failed."
@@ -4494,8 +4506,8 @@ msgid "Enhanced reading was unavailable. The built-in reader retrieved this post
 msgstr "拡張読み取りは利用できませんでした。内蔵リーダーがこの求人情報を取得しました。"
 
 #: src/components/ui/donation-toast.tsx
-msgid "Enjoying Reactive Resume?"
-msgstr "Reactive Resumeを気に入っていただけましたか？"
+msgid "Enjoying Fulei Resume?"
+msgstr ""
 
 #: src/features/career/knowledge/preferences.tsx
 msgid "Enter a full amount, such as 95000. Your previous amount is unchanged."
@@ -5151,6 +5163,10 @@ msgstr "あなたのメッセージから"
 msgid "From your resume"
 msgstr "履歴書から"
 
+#: src/routes/dashboard/settings/route.tsx
+msgid "Fulei Resume {__APP_VERSION__} · MIT"
+msgstr ""
+
 #: src/features/resume/editor/write/basics-card.tsx
 msgid "Full name"
 msgstr "フルネーム"
@@ -5241,8 +5257,8 @@ msgid "Go to…"
 msgstr "… へ移動"
 
 #: src/features/resume/share/download-tab.tsx
-msgid "Good luck out there. Reactive Resume stays free because people chip in."
-msgstr "幸運を祈ります。 Reactive Resume は人々が協力してくれるので無料のままです。"
+msgid "Good luck out there. Fulei Resume stays free because people chip in."
+msgstr ""
 
 #. Authentication provider display name in account settings
 #. Brand name label for Google social sign-in button
@@ -6594,8 +6610,8 @@ msgid "Lower the design sheet"
 msgstr "デザインシートを下げます"
 
 #: src/features/resume/public/public-resume.tsx
-msgid "Made with Reactive Resume, free and open source"
-msgstr "Reactive Resume で作成、無料かつオープンソース"
+msgid "Made with Fulei Resume, free and open source"
+msgstr ""
 
 #. Layout editor column label for the primary content area
 #: src/routes/builder/$resumeId/-sidebar/right/sections/layout/pages.tsx
@@ -8715,10 +8731,6 @@ msgstr "Re: Senior Product Designer"
 msgid "Reactive Resume - Go to homepage"
 msgstr "Reactive Resume - ホームページへ移動"
 
-#: src/routes/dashboard/settings/route.tsx
-msgid "Reactive Resume {__APP_VERSION__} · MIT"
-msgstr "Reactive Resume {__APP_VERSION__} · MIT"
-
 #: src/features/homepage/hero.tsx
 msgid "Reactive Resume is a free, open-source resume builder. Write it, design it, check it, tailor it for every job and walk into the interview prepared."
 msgstr "Reactive Resumeは、無料でオープンソースの履歴書作成ツールです。書いて、デザインして、チェックして、求人ごとに調整し、準備万端で面接に臨みましょう。"
@@ -9697,6 +9709,10 @@ msgstr "{0}に保存"
 msgid "Saved {0} to Applications"
 msgstr "{0}を応募に保存しました"
 
+#: src/features/resume/share/download-tab.tsx
+msgid "Saved {file}. The cover letter was not saved."
+msgstr ""
+
 #. placeholder {0}: story.data.title
 #: src/features/career/coach-thread.tsx
 msgid "Saved a story: {0}"
@@ -9717,6 +9733,10 @@ msgstr "たった今保存しました"
 #: src/features/career/coach-thread.tsx
 msgid "Saved offers"
 msgstr "保存したオファー"
+
+#: src/routes/builder/letter/-components/share-sheet.tsx
+msgid "Saved the resume. The letter was not saved."
+msgstr ""
 
 #: src/features/career/today.tsx
 msgid "Saved to Applications"

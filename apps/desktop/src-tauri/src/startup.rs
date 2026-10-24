@@ -74,10 +74,27 @@ pub(crate) fn fail(
     reason: &str,
 ) -> BootOutcome {
     if let Some(app_data) = app_data {
-        let _ = std::fs::create_dir_all(app_data);
-        let _ = std::fs::write(app_data.join("boot.log"), reason);
+        append_boot_reason(app_data, reason);
     }
     surface.present_failure(reason)
+}
+
+fn append_boot_reason(app_data: &Path, reason: &str) {
+    let _ = std::fs::create_dir_all(app_data);
+    let log = app_data.join("boot.log");
+    let already_recorded = std::fs::read_to_string(&log)
+        .map(|contents| contents.lines().last() == Some(reason))
+        .unwrap_or(false);
+    if already_recorded {
+        return;
+    }
+    let mut line = reason.to_string();
+    line.push('\n');
+    let _ = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log)
+        .and_then(|mut file| std::io::Write::write_all(&mut file, line.as_bytes()));
 }
 
 fn run(boot: &mut DesktopBoot<'_>) -> Result<(), String> {
@@ -428,7 +445,10 @@ mod tests {
         }
 
         fn boot_log(&self) -> String {
-            std::fs::read_to_string(self.app_data().join("boot.log")).expect("boot log")
+            std::fs::read_to_string(self.app_data().join("boot.log"))
+                .expect("boot log")
+                .trim_end()
+                .to_string()
         }
 
         fn legacy_runtime(&self) -> PathBuf {

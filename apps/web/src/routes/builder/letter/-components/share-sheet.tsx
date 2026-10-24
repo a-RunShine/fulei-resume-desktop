@@ -134,19 +134,32 @@ function LetterDownloadTab() {
 		try {
 			if (bothId) {
 				const resume = await client.resume.getById({ id: bothId });
-				await downloadFile({
+				const resumeOutcome = await downloadFile({
 					blob: await createExportFile(resume, "pdf"),
 					suggestedName: `${getDefaultFileName(resume)}.pdf`,
 				});
+				if (resumeOutcome === "cancelled") {
+					setState("idle");
+					return;
+				}
 				// Two downloads in a row are more reliable a moment apart.
 				await new Promise((resolve) => window.setTimeout(resolve, PAUSE_BETWEEN_FILES_MS));
-				await downloadFile({
+				const letterOutcome = await downloadFile({
 					blob: await createLetterFile(letter, "pdf"),
 					suggestedName: `${letterFileName(letter)}.pdf`,
 				});
+				if (letterOutcome === "cancelled") {
+					toast.add({ description: t`Saved the resume. The letter was not saved.` });
+					setState("done");
+					return;
+				}
 				toast.add({ description: t`Downloaded your resume and this letter` });
 			} else if (as !== "both") {
-				await downloadFile({ blob: await createLetterFile(letter, as), suggestedName: file });
+				const outcome = await downloadFile({ blob: await createLetterFile(letter, as), suggestedName: file });
+				if (outcome === "cancelled") {
+					setState("idle");
+					return;
+				}
 				toast.add({ description: t`Downloaded ${file}` });
 			}
 			setState("done");

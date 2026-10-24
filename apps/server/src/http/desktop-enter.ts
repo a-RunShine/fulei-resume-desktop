@@ -2,6 +2,7 @@ import { existsSync, writeFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { auth } from "@reactive-resume/auth/config";
 import { env } from "@reactive-resume/env/server";
+import { escapeHtml } from "@reactive-resume/utils/string";
 
 const email = "local@example.com";
 const password = "local-desktop-password-32";
@@ -103,8 +104,4 @@ function desktopFailure(failures: Attempt[]): Response {
 		status: 500,
 		headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
 	});
-}
-
-function escapeHtml(value: string) {
-	return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 }

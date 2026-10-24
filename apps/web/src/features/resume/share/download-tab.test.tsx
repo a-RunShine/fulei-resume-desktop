@@ -86,4 +86,16 @@ describe("the share panel download", () => {
 			expect(toast.add).toHaveBeenCalledWith(expect.objectContaining({ type: "error", description: "disk full" })),
 		);
 	});
+
+	it("does not claim success when the dialog is cancelled", async () => {
+		const { toast } = await import("@reactive-resume/ui/components/toast");
+		mocks.save.mockResolvedValue("cancelled");
+
+		await submit("pdf");
+
+		await waitFor(() => expect(mocks.save).toHaveBeenCalledOnce());
+		expect(toast.add).not.toHaveBeenCalledWith(
+			expect.objectContaining({ description: expect.stringContaining("Downloaded") }),
+		);
+	});
 });

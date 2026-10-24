@@ -6,7 +6,7 @@ import { t } from "@lingui/core/macro";
  * what changes as the visitor navigates: the title, the description and, where needed, `noindex`.
  */
 
-const appName = "Fulei Resume";
+const appName = "Reactive Resume";
 
 export const createNoindexFollowMeta = () => ({ name: "robots", content: "noindex, follow" });
 

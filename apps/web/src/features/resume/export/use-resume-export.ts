@@ -9,7 +9,8 @@ import { getResumeExportData } from "@reactive-resume/resume/export-sections";
 import { buildMarkdown } from "@reactive-resume/resume/markdown";
 import { toast } from "@reactive-resume/ui/components/toast";
 import { createResumePdfBlob } from "./pdf-document";
-import { detectionRuntime, saveFile } from "./save-file";
+import { saveFile } from "./save-file";
+import { detectionRuntime } from "@/libs/desktop-runtime";
 
 const saveDestination = detectionRuntime(globalThis);
 import { resolvePublicResumePdfBlob } from "@/features/resume/public/public-pdf";

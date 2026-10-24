@@ -3107,6 +3107,10 @@ msgstr "មិនអាចរៀបចំប្រវត្តិរូបសង
 msgid "Could not revoke this connection. Try again."
 msgstr "មិនអាចដកហូតការតភ្ជាប់នេះបានទេ។ ព្យាយាមម្តងទៀត។"
 
+#: src/features/applications/components/detail/next-step-card.tsx
+msgid "Could not save the calendar file."
+msgstr ""
+
 #: src/dialogs/auth/enable-two-factor.tsx
 msgid "Could not set up two-factor authentication."
 msgstr "មិនអាចដំឡើងការផ្ទៀងផ្ទាត់ពីរជាន់បានទេ។"
@@ -4105,6 +4109,14 @@ msgstr "ទាញយកព័ត៌មានលម្អិតពាក្យស
 msgid "Download CSV"
 msgstr "ទាញយក CSV"
 
+#: src/dialogs/auth/enable-two-factor.tsx
+#: src/features/applications/components/export-applications-sheet.tsx
+#: src/features/applications/components/import-applications-sheet.tsx
+#: src/features/applications/components/insights-view.tsx
+#: src/features/career/workspace/apply.tsx
+#: src/features/career/workspace/debrief.tsx
+#: src/features/career/workspace/practise.tsx
+#: src/features/career/workspace/shell.tsx
 #: src/features/resume/share/download-tab.tsx
 #: src/routes/builder/letter/-components/share-sheet.tsx
 msgid "Download failed."
@@ -4494,8 +4506,8 @@ msgid "Enhanced reading was unavailable. The built-in reader retrieved this post
 msgstr "ការអានដែលប្រសើរឡើងគឺមិនមានទេ។ អ្នកអានដែលភ្ជាប់មកជាមួយបានទាញយកការប្រកាសការងារនេះ។"
 
 #: src/components/ui/donation-toast.tsx
-msgid "Enjoying Reactive Resume?"
-msgstr "ចូលចិត្ត Reactive Resume ទេ?"
+msgid "Enjoying Fulei Resume?"
+msgstr ""
 
 #: src/features/career/knowledge/preferences.tsx
 msgid "Enter a full amount, such as 95000. Your previous amount is unchanged."
@@ -5151,6 +5163,10 @@ msgstr "ពីសាររបស់អ្នក"
 msgid "From your resume"
 msgstr "ពីប្រវត្តិរូបសង្ខេបរបស់អ្នក"
 
+#: src/routes/dashboard/settings/route.tsx
+msgid "Fulei Resume {__APP_VERSION__} · MIT"
+msgstr ""
+
 #: src/features/resume/editor/write/basics-card.tsx
 msgid "Full name"
 msgstr "ឈ្មោះពេញ"
@@ -5241,8 +5257,8 @@ msgid "Go to…"
 msgstr "ចូលទៅកាន់…"
 
 #: src/features/resume/share/download-tab.tsx
-msgid "Good luck out there. Reactive Resume stays free because people chip in."
-msgstr "សូមសំណាងល្អនៅទីនោះ។ Reactive Resume ស្នាក់នៅដោយមិនគិតថ្លៃ ដោយសារមនុស្សច្របូកច្របល់។"
+msgid "Good luck out there. Fulei Resume stays free because people chip in."
+msgstr ""
 
 #. Authentication provider display name in account settings
 #. Brand name label for Google social sign-in button
@@ -6594,8 +6610,8 @@ msgid "Lower the design sheet"
 msgstr "ទម្លាក់សន្លឹករចនា"
 
 #: src/features/resume/public/public-resume.tsx
-msgid "Made with Reactive Resume, free and open source"
-msgstr "ផលិតជាមួយ Reactive Resume ឥតគិតថ្លៃ និងប្រភពបើកចំហ"
+msgid "Made with Fulei Resume, free and open source"
+msgstr ""
 
 #. Layout editor column label for the primary content area
 #: src/routes/builder/$resumeId/-sidebar/right/sections/layout/pages.tsx
@@ -8715,10 +8731,6 @@ msgstr "Re: Senior Product Designer"
 msgid "Reactive Resume - Go to homepage"
 msgstr "Reactive Resume - ទៅ​កាន់​ទំព័រ​ដើម"
 
-#: src/routes/dashboard/settings/route.tsx
-msgid "Reactive Resume {__APP_VERSION__} · MIT"
-msgstr "Reactive Resume {__APP_VERSION__} · MIT"
-
 #: src/features/homepage/hero.tsx
 msgid "Reactive Resume is a free, open-source resume builder. Write it, design it, check it, tailor it for every job and walk into the interview prepared."
 msgstr "Reactive Resume គឺជាកម្មវិធីបង្កើតប្រវត្តិរូបសង្ខេបឥតគិតថ្លៃ និងកូដចំហ។ សរសេរវា រចនាវា ពិនិត្យវា កែសម្រួលវាសម្រាប់ការងារនីមួយៗ ហើយចូលសម្ភាសន៍ដោយបានត្រៀមខ្លួនរួចរាល់។"
@@ -9697,6 +9709,10 @@ msgstr "បានរក្សាទុក {0}"
 msgid "Saved {0} to Applications"
 msgstr "បានរក្សាទុក {0} ទៅពាក្យសុំ"
 
+#: src/features/resume/share/download-tab.tsx
+msgid "Saved {file}. The cover letter was not saved."
+msgstr ""
+
 #. placeholder {0}: story.data.title
 #: src/features/career/coach-thread.tsx
 msgid "Saved a story: {0}"
@@ -9717,6 +9733,10 @@ msgstr "ទើបរក្សាទុកអម្បាញ់មិញ"
 #: src/features/career/coach-thread.tsx
 msgid "Saved offers"
 msgstr "ការផ្តល់ការងារដែលបានរក្សាទុក"
+
+#: src/routes/builder/letter/-components/share-sheet.tsx
+msgid "Saved the resume. The letter was not saved."
+msgstr ""
 
 #: src/features/career/today.tsx
 msgid "Saved to Applications"

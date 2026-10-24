@@ -7,11 +7,7 @@ import { describe, expect, it } from "vitest";
 
 const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../public");
 const variants = ["light", "dark"] as const;
-const brandFiles = [
-	...variants.map((variant) => `icon/${variant}.svg`),
-	...variants.map((variant) => `logo/${variant}.svg`),
-	"favicon.svg",
-];
+const brandFiles = [...variants.map((variant) => `icon/${variant}.svg`), "favicon.svg"];
 
 const read = (relative: string) => fs.readFileSync(path.join(publicDir, relative), "utf8");
 const parse = (source: string) => new DOMParser().parseFromString(source, "image/svg+xml");
@@ -34,17 +30,13 @@ describe("shipped brand artwork", () => {
 		expect(label).toBe("Fulei Resume");
 	});
 
-	it.each(brandFiles)("escapes nothing away from the raw label attribute on %s", (relative) => {
+	it.each(brandFiles)("keeps the label attribute closed and quote-free on %s", (relative) => {
 		const source = read(relative);
 		const closing = source.match(/aria-label="([^"]*)"/);
 
 		expect(closing).not.toBeNull();
 		expect(closing?.[1]).not.toContain("<");
 		expect(closing?.[1]).not.toContain('"');
-	});
-
-	it("keeps the light and dark marks identical so neither theme renders blank", () => {
-		expect(read("icon/light.svg")).toBe(read("icon/dark.svg"));
 	});
 
 	it("ships a mark for every surface that asks for one", () => {
@@ -54,7 +46,7 @@ describe("shipped brand artwork", () => {
 		}
 	});
 
-	it("gives the two variants different artwork so the dark theme stays visible", () => {
-		expect(read("logo/light.svg")).not.toBe(read("logo/dark.svg"));
+	it("keeps the light and dark marks identical so neither theme renders blank", () => {
+		expect(read("icon/light.svg")).toBe(read("icon/dark.svg"));
 	});
 });

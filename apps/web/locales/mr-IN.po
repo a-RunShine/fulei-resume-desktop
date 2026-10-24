@@ -3107,6 +3107,10 @@ msgstr "तुमचा रेझ्युमे छपाईसाठी तय
 msgid "Could not revoke this connection. Try again."
 msgstr "हे कनेक्शन मागे घेता आले नाही. पुन्हा प्रयत्न करा."
 
+#: src/features/applications/components/detail/next-step-card.tsx
+msgid "Could not save the calendar file."
+msgstr ""
+
 #: src/dialogs/auth/enable-two-factor.tsx
 msgid "Could not set up two-factor authentication."
 msgstr "दुहेरी घटक ओथेंटिकेशन सेट करता आले नाही."
@@ -4105,6 +4109,14 @@ msgstr "अर्ज तपशील, संपर्क, नोट्स आण
 msgid "Download CSV"
 msgstr "CSV डाउनलोड करा"
 
+#: src/dialogs/auth/enable-two-factor.tsx
+#: src/features/applications/components/export-applications-sheet.tsx
+#: src/features/applications/components/import-applications-sheet.tsx
+#: src/features/applications/components/insights-view.tsx
+#: src/features/career/workspace/apply.tsx
+#: src/features/career/workspace/debrief.tsx
+#: src/features/career/workspace/practise.tsx
+#: src/features/career/workspace/shell.tsx
 #: src/features/resume/share/download-tab.tsx
 #: src/routes/builder/letter/-components/share-sheet.tsx
 msgid "Download failed."
@@ -4494,8 +4506,8 @@ msgid "Enhanced reading was unavailable. The built-in reader retrieved this post
 msgstr "वर्धित वाचन अनुपलब्ध होते. अंगभूत वाचकाने हे जॉब पोस्टिंग पुनर्प्राप्त केले."
 
 #: src/components/ui/donation-toast.tsx
-msgid "Enjoying Reactive Resume?"
-msgstr "Reactive Resume आवडत आहे?"
+msgid "Enjoying Fulei Resume?"
+msgstr ""
 
 #: src/features/career/knowledge/preferences.tsx
 msgid "Enter a full amount, such as 95000. Your previous amount is unchanged."
@@ -5151,6 +5163,10 @@ msgstr "तुमच्या संदेशातून"
 msgid "From your resume"
 msgstr "तुमच्या रेझ्युमेमधून"
 
+#: src/routes/dashboard/settings/route.tsx
+msgid "Fulei Resume {__APP_VERSION__} · MIT"
+msgstr ""
+
 #: src/features/resume/editor/write/basics-card.tsx
 msgid "Full name"
 msgstr "पूर्ण नाव"
@@ -5241,8 +5257,8 @@ msgid "Go to…"
 msgstr "… वर जा"
 
 #: src/features/resume/share/download-tab.tsx
-msgid "Good luck out there. Reactive Resume stays free because people chip in."
-msgstr "तेथे शुभेच्छा. Reactive Resume विनामूल्य राहतात कारण लोक चीप इन करतात."
+msgid "Good luck out there. Fulei Resume stays free because people chip in."
+msgstr ""
 
 #. Authentication provider display name in account settings
 #. Brand name label for Google social sign-in button
@@ -6594,8 +6610,8 @@ msgid "Lower the design sheet"
 msgstr "डिझाइन शीट खाली करा"
 
 #: src/features/resume/public/public-resume.tsx
-msgid "Made with Reactive Resume, free and open source"
-msgstr "Reactive Resume सह बनवलेले, विनामूल्य आणि मुक्त स्रोत"
+msgid "Made with Fulei Resume, free and open source"
+msgstr ""
 
 #. Layout editor column label for the primary content area
 #: src/routes/builder/$resumeId/-sidebar/right/sections/layout/pages.tsx
@@ -8715,10 +8731,6 @@ msgstr "Re: सीनियर प्रॉडक्ट डिझायनर"
 msgid "Reactive Resume - Go to homepage"
 msgstr "Reactive Resume - मुखपृष्ठावर जा"
 
-#: src/routes/dashboard/settings/route.tsx
-msgid "Reactive Resume {__APP_VERSION__} · MIT"
-msgstr "Reactive Resume {__APP_VERSION__} · MIT"
-
 #: src/features/homepage/hero.tsx
 msgid "Reactive Resume is a free, open-source resume builder. Write it, design it, check it, tailor it for every job and walk into the interview prepared."
 msgstr "Reactive Resume हा विनामूल्य, ओपन-सोर्स रेझ्युमे बिल्डर आहे. तो लिहा, डिझाइन करा, तपासा, प्रत्येक नोकरीसाठी जुळवून घ्या आणि तयारीनिशी मुलाखतीला जा."
@@ -9697,6 +9709,10 @@ msgstr "{0} जतन केले"
 msgid "Saved {0} to Applications"
 msgstr "{0} अर्जांमध्ये जतन केले"
 
+#: src/features/resume/share/download-tab.tsx
+msgid "Saved {file}. The cover letter was not saved."
+msgstr ""
+
 #. placeholder {0}: story.data.title
 #: src/features/career/coach-thread.tsx
 msgid "Saved a story: {0}"
@@ -9717,6 +9733,10 @@ msgstr "आत्ताच जतन केले"
 #: src/features/career/coach-thread.tsx
 msgid "Saved offers"
 msgstr "जतन केलेल्या ऑफर्स"
+
+#: src/routes/builder/letter/-components/share-sheet.tsx
+msgid "Saved the resume. The letter was not saved."
+msgstr ""
 
 #: src/features/career/today.tsx
 msgid "Saved to Applications"
