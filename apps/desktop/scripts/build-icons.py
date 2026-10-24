@@ -40,10 +40,9 @@ FL_PATHS = [
 
 FL_BOX = (106.0, 84.0, 406.0, 313.0)
 
-RESUME_SIZE = 58
-RESUME_TRACKING = 4
-RESUME_CENTER = 254
-RESUME_BASELINE = 404
+RESUME_SIZE = 82
+RESUME_TRACKING = 5.6
+RESUME_GAP = 24
 
 
 def resume_path():
@@ -52,19 +51,20 @@ def resume_path():
     upem = font["head"].unitsPerEm
     cmap = font.getBestCmap()
     hmtx = font["hmtx"]
+    cap_ratio = font["OS/2"].sCapHeight / upem
     scale = RESUME_SIZE / upem
     text = "Resume"
 
     advances = [hmtx[cmap[ord(char)]][0] * scale for char in text]
-    cursor = RESUME_CENTER - (sum(advances) + RESUME_TRACKING * (len(text) - 1)) / 2
+    width = sum(advances) + RESUME_TRACKING * (len(text) - 1)
+    cursor = FL_BOX[2] - (FL_BOX[2] - FL_BOX[0]) / 2 - width / 2
+    baseline = FL_BOX[3] + RESUME_GAP + cap_ratio * RESUME_SIZE
 
     commands = []
     for index, char in enumerate(text):
         glyph_name = cmap[ord(char)]
         pen = SVGPathPen(glyph_set, ntos=lambda value: f"{value:.2f}")
-        glyph_set[glyph_name].draw(
-            TransformPen(pen, (scale, 0, 0, -scale, cursor, RESUME_BASELINE))
-        )
+        glyph_set[glyph_name].draw(TransformPen(pen, (scale, 0, 0, -scale, cursor, baseline)))
         drawing = pen.getCommands()
         if drawing:
             commands.append(drawing)
