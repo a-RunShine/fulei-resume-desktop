@@ -28,7 +28,7 @@ it("asks after five minutes and remembers a dismissal", async () => {
 
 	await act(() => vi.advanceTimersByTimeAsync(FIVE_MINUTES));
 	// In the DOM, not "visible": without LazyMotion features loaded, the entrance stays at opacity 0.
-	expect(screen.getByText("Enjoying Reactive Resume?")).toBeInTheDocument();
+	expect(screen.getByText("Enjoying Fulei Resume?")).toBeInTheDocument();
 
 	fireEvent.click(screen.getByRole("button", { name: "Maybe later" }));
 	expect(Cookies.get(DISMISSED_COOKIE)).toBe("true");

@@ -6,34 +6,55 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../public");
-const brandFiles = ["icon/light.svg", "icon/dark.svg", "favicon.svg"];
+const variants = ["light", "dark"] as const;
+const brandFiles = [
+	...variants.map((variant) => `icon/${variant}.svg`),
+	...variants.map((variant) => `logo/${variant}.svg`),
+	"favicon.svg",
+];
+
+const read = (relative: string) => fs.readFileSync(path.join(publicDir, relative), "utf8");
+const parse = (source: string) => new DOMParser().parseFromString(source, "image/svg+xml");
 
 describe("shipped brand artwork", () => {
 	it.each(brandFiles)("parses %s as well-formed markup", (relative) => {
-		const document = new DOMParser().parseFromString(
-			fs.readFileSync(path.join(publicDir, relative), "utf8"),
-			"image/svg+xml",
-		);
+		const document = parse(read(relative));
 
 		expect(document.querySelector("parsererror")).toBeNull();
 		expect(document.documentElement.tagName.toLowerCase()).toBe("svg");
 	});
 
 	it.each(brandFiles)("carries a complete accessible label on %s", (relative) => {
-		const document = new DOMParser().parseFromString(
-			fs.readFileSync(path.join(publicDir, relative), "utf8"),
-			"image/svg+xml",
-		);
+		const document = parse(read(relative));
 		const label = document.documentElement.getAttribute("aria-label") ?? "";
 
 		expect(label.length).toBeGreaterThan(0);
 		expect(label).not.toMatch(/\uFFFD/);
 		expect(label).toBe(label.trim());
+		expect(label).toBe("Fulei Resume");
+	});
+
+	it.each(brandFiles)("escapes nothing away from the raw label attribute on %s", (relative) => {
+		const source = read(relative);
+		const closing = source.match(/aria-label="([^"]*)"/);
+
+		expect(closing).not.toBeNull();
+		expect(closing?.[1]).not.toContain("<");
+		expect(closing?.[1]).not.toContain('"');
 	});
 
 	it("keeps the light and dark marks identical so neither theme renders blank", () => {
-		const read = (name: string) => fs.readFileSync(path.join(publicDir, "icon", `${name}.svg`), "utf8");
+		expect(read("icon/light.svg")).toBe(read("icon/dark.svg"));
+	});
 
-		expect(read("light")).toBe(read("dark"));
+	it("ships a mark for every surface that asks for one", () => {
+		for (const variant of variants) {
+			expect(fs.existsSync(path.join(publicDir, "icon", `${variant}.svg`))).toBe(true);
+			expect(fs.existsSync(path.join(publicDir, "logo", `${variant}.svg`))).toBe(true);
+		}
+	});
+
+	it("gives the two variants different artwork so the dark theme stays visible", () => {
+		expect(read("logo/light.svg")).not.toBe(read("logo/dark.svg"));
 	});
 });
