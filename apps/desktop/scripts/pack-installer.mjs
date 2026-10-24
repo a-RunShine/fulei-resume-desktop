@@ -213,6 +213,14 @@ export function stageServer({ bundleDir, modulesDir, migrationsDir, destination 
 		fs.mkdirSync(path.dirname(to), { recursive: true });
 		fs.cpSync(from, to, { recursive: true, dereference: true });
 	}
+	stageFormeEngine(modulesDir, destination);
+}
+
+const FORME_ENGINE_WASM = "forme_bg.wasm";
+
+export function stageFormeEngine(modulesDir, destination) {
+	const source = path.join(modulesDir, "@formepdf", "core", "pkg-node", FORME_ENGINE_WASM);
+	fs.copyFileSync(source, path.join(destination, FORME_ENGINE_WASM));
 }
 
 export function missingExternalPackages(serverDir) {
@@ -228,6 +236,7 @@ export function verifyRuntimeLayout(destination) {
 	const required = [
 		nodeExecutable ?? path.join(destination, "node", "node.exe"),
 		path.join(destination, "server", "desktop-host.mjs"),
+		path.join(destination, "server", FORME_ENGINE_WASM),
 		path.join(destination, "web", "dist", "index.html"),
 	];
 	const missing = required.filter((candidate) => !fs.existsSync(candidate));

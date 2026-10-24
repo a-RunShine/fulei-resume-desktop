@@ -1,9 +1,9 @@
 {
 	"$schema": "https://schema.tauri.app/config/2",
-	"productName": "Reactive Resume",
-	"mainBinaryName": "Reactive Resume",
+	"productName": "Fulei Resume",
+	"mainBinaryName": "Fulei Resume",
 	"version": "0.1.0",
-	"identifier": "dev.reactivresume.desktop",
+	"identifier": "dev.fuleiresume.desktop",
 	"build": {
 		"beforeDevCommand": "node -e \"process.exit(0)\"",
 		"devUrl": "http://127.0.0.1:47821",

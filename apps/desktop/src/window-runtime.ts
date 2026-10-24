@@ -241,7 +241,7 @@ export type WindowOptions = {
 
 export const localAppDataDirectory = (appDirectory: string) => join(appDirectory, "local-app-data");
 export const desktopDataDirectory = (appDirectory: string) =>
-	join(localAppDataDirectory(appDirectory), "Reactive Resume", "data");
+	join(localAppDataDirectory(appDirectory), "Fulei Resume", "data");
 
 export const openDesktopWindow = async (options: WindowOptions): Promise<WindowSession> => {
 	const runtime = await stageWindowRuntime();

@@ -8,8 +8,11 @@ import { getResumeSectionTitle } from "@reactive-resume/pdf/section-title";
 import { getResumeExportData } from "@reactive-resume/resume/export-sections";
 import { buildMarkdown } from "@reactive-resume/resume/markdown";
 import { toast } from "@reactive-resume/ui/components/toast";
-import { downloadWithAnchor } from "@reactive-resume/utils/file";
 import { createResumePdfBlob } from "./pdf-document";
+import { saveFile } from "./save-file";
+import { detectionRuntime } from "@/libs/desktop-runtime";
+
+const saveDestination = detectionRuntime(globalThis);
 import { resolvePublicResumePdfBlob } from "@/features/resume/public/public-pdf";
 import { getLostCharactersMessage, getReadableErrorMessage } from "@/libs/error-message";
 import { client } from "@/libs/orpc/client";
@@ -119,7 +122,10 @@ export function useResumeExport(resume: ExportableResume | undefined, exportOpti
 	const onDownloadJSON = useCallback(async () => {
 		if (!resume) return;
 		try {
-			downloadWithAnchor(await createExportFile(resume, "json"), `${getDefaultFileName(resume)}.json`);
+			await saveFile(
+				{ blob: await createExportFile(resume, "json"), suggestedName: `${getDefaultFileName(resume)}.json` },
+				saveDestination,
+			);
 		} catch {
 			toast.add({ type: "error", description: t`Could not generate the JSON. Please try again.` });
 		}
@@ -129,7 +135,7 @@ export function useResumeExport(resume: ExportableResume | undefined, exportOpti
 		if (!resume) return;
 		try {
 			const blob = await createExportFile(resume, "md");
-			downloadWithAnchor(blob, `${getDefaultFileName(resume)}.md`);
+			await saveFile({ blob, suggestedName: `${getDefaultFileName(resume)}.md` }, saveDestination);
 		} catch {
 			toast.add({ type: "error", description: t`Could not generate the Markdown. Please try again.` });
 		}
@@ -139,7 +145,7 @@ export function useResumeExport(resume: ExportableResume | undefined, exportOpti
 		if (!resume) return;
 		try {
 			const blob = await createExportFile(resume, "docx");
-			downloadWithAnchor(blob, `${getDefaultFileName(resume)}.docx`);
+			await saveFile({ blob, suggestedName: `${getDefaultFileName(resume)}.docx` }, saveDestination);
 		} catch {
 			toast.add({ type: "error", description: t`Could not generate the DOCX. Please try again.` });
 		}
@@ -158,7 +164,7 @@ export function useResumeExport(resume: ExportableResume | undefined, exportOpti
 				: createExportFile(resume, "pdf");
 		try {
 			const blob = await makeBlob();
-			downloadWithAnchor(blob, `${getDefaultFileName(resume)}.pdf`);
+			await saveFile({ blob, suggestedName: `${getDefaultFileName(resume)}.pdf` }, saveDestination);
 			if (exportOptions.publicResumePdf) {
 				// Statistics are best effort and must not delay or fail a completed browser download.
 				void client.resume.statistics.recordDownload(exportOptions.publicResumePdf.publicResume).catch(() => undefined);

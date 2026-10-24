@@ -21,13 +21,14 @@ import { Skeleton } from "@reactive-resume/ui/components/skeleton";
 import { Textarea } from "@reactive-resume/ui/components/textarea";
 import { toast } from "@reactive-resume/ui/components/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@reactive-resume/ui/components/tooltip";
-import { downloadWithAnchor, generateFilename } from "@reactive-resume/utils/file";
+import { generateFilename } from "@reactive-resume/utils/file";
 import { cn } from "@reactive-resume/utils/style";
 import { latest, useDebouncedSave, useDefaultProvider, useGenerate, useSavedItems, useWorkspace } from "../hooks";
 import { CollapseRow, Swap, useCareerTime, withUndo, Working, workingSteps } from "../shared";
 import { AiNotice } from "./fit";
 import { useInvalidateApplications } from "@/features/applications/use-application-actions";
-import { getOrpcErrorMessage } from "@/libs/error-message";
+import { downloadFile } from "@/features/resume/export/save-file";
+import { getOrpcErrorMessage, getReadableErrorMessage } from "@/libs/error-message";
 import { orpc } from "@/libs/orpc/client";
 
 type Answer = CareerWorkspace["answers"][number];
@@ -528,7 +529,7 @@ function Checklist({
 		toast.add({ description: t`Answers copied` });
 	};
 
-	const download = (format: "md" | "txt") => {
+	const download = async (format: "md" | "txt") => {
 		const written = currentAnswers().filter((answer) => answer.answer.trim());
 		const body =
 			format === "md"
@@ -540,10 +541,14 @@ function Checklist({
 						`${application.role} · ${application.company}`,
 						...written.map((answer) => `${answer.question}\n\n${answer.answer}`),
 					].join("\n\n\n");
-		downloadWithAnchor(
-			new Blob([`${body}\n`], { type: format === "md" ? "text/markdown" : "text/plain" }),
-			generateFilename(`${application.company} answers`, format),
-		);
+		try {
+			await downloadFile({
+				blob: new Blob([`${body}\n`], { type: format === "md" ? "text/markdown" : "text/plain" }),
+				suggestedName: generateFilename(`${application.company} answers`, format),
+			});
+		} catch (error) {
+			toast.add({ type: "error", description: getReadableErrorMessage(error, t`Download failed.`) });
+		}
 	};
 
 	const markApplied = async () => {

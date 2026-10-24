@@ -21,9 +21,9 @@ import { Icon } from "@reactive-resume/ui/components/icon";
 import { Input } from "@reactive-resume/ui/components/input";
 import { OTPField } from "@reactive-resume/ui/components/otp-field";
 import { toast } from "@reactive-resume/ui/components/toast";
-import { downloadWithAnchor } from "@reactive-resume/utils/file";
 import { useDialogStore } from "../store";
 import { PasswordInput } from "@/components/input/password-input";
+import { downloadFile } from "@/features/resume/export/save-file";
 import { useFormBlocker } from "@/hooks/use-form-blocker";
 import { authClient } from "@/libs/auth/client";
 import { getReadableErrorMessage } from "@/libs/error-message";
@@ -66,7 +66,7 @@ export function EnableTwoFactorDialog(_: DialogProps<"auth.two-factor.enable">) 
 
 			const { data, error } = await authClient.twoFactor.enable({
 				password: value.password,
-				issuer: "Reactive Resume",
+				issuer: "Fulei Resume",
 			});
 
 			if (error) {
@@ -165,9 +165,16 @@ export function EnableTwoFactorDialog(_: DialogProps<"auth.two-factor.enable">) 
 		toast.add({ type: "success", description: t`Backup codes copied to clipboard.` });
 	};
 
-	const handleDownloadBackupCodes = () => {
+	const handleDownloadBackupCodes = async () => {
 		if (!backupCodes) return;
-		downloadWithAnchor(new Blob([backupCodes.join("\n")], { type: "text/plain" }), "reactive-resume_backup-codes.txt");
+		try {
+			await downloadFile({
+				blob: new Blob([backupCodes.join("\n")], { type: "text/plain" }),
+				suggestedName: "fulei-resume_backup-codes.txt",
+			});
+		} catch (error) {
+			toast.add({ type: "error", description: getReadableErrorMessage(error, t`Download failed.`) });
+		}
 	};
 
 	return (

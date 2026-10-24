@@ -80,10 +80,10 @@ export function PublicResumePage({ resume, username, slug, flags, isRoot = false
 	const credit = (
 		<footer className="flex justify-center px-4 py-6 text-sm text-ink-3 print:hidden">
 			{flags.disableSignups ? (
-				<Trans>Made with Reactive Resume, free and open source</Trans>
+				<Trans>Made with Fulei Resume, free and open source</Trans>
 			) : (
 				<a href={isRoot ? "/dashboard" : "/"} className="underline-offset-2 hover:text-ink hover:underline">
-					<Trans>Made with Reactive Resume, free and open source</Trans>
+					<Trans>Made with Fulei Resume, free and open source</Trans>
 				</a>
 			)}
 		</footer>

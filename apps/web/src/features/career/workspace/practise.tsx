@@ -37,9 +37,10 @@ import {
 	speakAloud,
 	writeNumbersAsDigits,
 } from "./recorder";
+import { downloadFile } from "@/features/resume/export/save-file";
 import { AiProviderLoadState } from "@/features/settings/integrations/ai-provider-load-state";
 import { useHasUsableAiProvider } from "@/features/settings/integrations/hooks/use-has-usable-ai-provider";
-import { getOrpcErrorMessage } from "@/libs/error-message";
+import { getOrpcErrorMessage, getReadableErrorMessage } from "@/libs/error-message";
 import { D2, EASE, ENTER_CLASS } from "@/libs/motion";
 import { client } from "@/libs/orpc/client";
 
@@ -933,14 +934,23 @@ function VoiceSettingsPanel({ voice, audio, disabled }: VoiceSettingsPanelProps)
 										<Trans>Keep the recording in this browser so I can download it</Trans>
 									</label>
 									{settings.keep && audio && (
-										<a
-											href={audio.url}
-											download={audio.file.name}
+										<button
+											type="button"
 											className="flex items-center gap-1 text-[13px] text-accent-text underline-offset-3 hover:underline"
+											onClick={() => {
+												void downloadFile({ blob: audio.file, suggestedName: audio.file.name }).catch(
+													(error: unknown) => {
+														toast.add({
+															type: "error",
+															description: getReadableErrorMessage(error, t`Download failed.`),
+														});
+													},
+												);
+											}}
 										>
 											<Icon name="download-simple" size={16} />
 											<Trans>Download</Trans>
-										</a>
+										</button>
 									)}
 								</div>
 							)}

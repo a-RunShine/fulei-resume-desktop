@@ -18,13 +18,13 @@ import { Spinner } from "@reactive-resume/ui/components/spinner";
 import { TabsList, TabsTrigger } from "@reactive-resume/ui/components/tabs";
 import { toast } from "@reactive-resume/ui/components/toast";
 import { useBreakpoint } from "@reactive-resume/ui/hooks/use-breakpoint";
-import { downloadWithAnchor } from "@reactive-resume/utils/file";
 import { cn } from "@reactive-resume/utils/style";
 import { AssistantButton } from "@/features/assistant/assistant-button";
 import { createLetterFile, letterFileName } from "@/features/letters/export";
 import { useLetterEditorStore } from "@/features/letters/store";
 import { BackLink, DocumentMenuTrigger, DrawerControls } from "@/features/resume/editor/chrome";
 import { useEditorStore } from "@/features/resume/editor/store";
+import { downloadFile } from "@/features/resume/export/save-file";
 import { usePrompt } from "@/hooks/use-confirm";
 import { getOrpcErrorMessage, getReadableErrorMessage } from "@/libs/error-message";
 import { ENTER_CLASS } from "@/libs/motion";
@@ -108,7 +108,7 @@ export function useDownloadLetter() {
 		const toastId = toast.add({ type: "loading", description: t`Generating your PDF...` });
 		try {
 			const blob = await createLetterFile(letter, "pdf");
-			downloadWithAnchor(blob, `${letterFileName(letter)}.pdf`);
+			await downloadFile({ blob, suggestedName: `${letterFileName(letter)}.pdf` });
 		} catch (error) {
 			toast.add({
 				type: "error",

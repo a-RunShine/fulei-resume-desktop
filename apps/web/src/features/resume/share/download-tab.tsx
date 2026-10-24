@@ -13,12 +13,12 @@ import { Checkbox } from "@reactive-resume/ui/components/checkbox";
 import { Icon } from "@reactive-resume/ui/components/icon";
 import { Spinner } from "@reactive-resume/ui/components/spinner";
 import { toast } from "@reactive-resume/ui/components/toast";
-import { downloadWithAnchor } from "@reactive-resume/utils/file";
 import { cn } from "@reactive-resume/utils/style";
 import { applicationsListQueryOptions } from "@/features/applications/queries";
 import { createLetterFile, letterFileName } from "@/features/letters/export";
 import { useCurrentResume } from "@/features/resume/builder/draft";
 import { useOpenIssueCount } from "@/features/resume/editor/check/use-check";
+import { downloadFile } from "@/features/resume/export/save-file";
 import { createExportFile, getDefaultFileName, sanitizeFileName } from "@/features/resume/export/use-resume-export";
 import { getReadableErrorMessage } from "@/libs/error-message";
 import { ENTER_CLASS } from "@/libs/motion";
@@ -205,7 +205,7 @@ export function DownloadActions({ state, label, onDownload, onDownloadPdf }: Dow
 				<p className={cn(ENTER_CLASS, "flex items-start gap-2 text-[13px] leading-[19px] text-ink-2")}>
 					<Icon name="hand-heart" size={18} className="shrink-0 text-ink-3" />
 					<span>
-						<Trans>Good luck out there. Reactive Resume stays free because people chip in.</Trans>{" "}
+						<Trans>Good luck out there. Fulei Resume stays free because people chip in.</Trans>{" "}
 						<a
 							href="https://opencollective.com/reactive-resume/donate"
 							target="_blank"
@@ -261,10 +261,22 @@ export function DownloadTab({ onReview }: DownloadTabProps) {
 		setState("busy");
 		try {
 			const blob = await createExportFile(resume, as);
-			downloadWithAnchor(blob, file);
+			const resumeOutcome = await downloadFile({ blob, suggestedName: file });
+			if (resumeOutcome === "cancelled") {
+				setState("idle");
+				return;
+			}
 			if (letterId) {
 				const letter = await client.coverLetters.getById({ id: letterId });
-				downloadWithAnchor(await createLetterFile(letter, as), `${letterFileName(letter)}${extension}`);
+				const letterOutcome = await downloadFile({
+					blob: await createLetterFile(letter, as),
+					suggestedName: `${letterFileName(letter)}${extension}`,
+				});
+				if (letterOutcome === "cancelled") {
+					toast.add({ description: t`Saved ${file}. The cover letter was not saved.` });
+					setState("done");
+					return;
+				}
 				toast.add({ description: t`Downloaded ${file} and the cover letter` });
 			} else {
 				toast.add({ description: t`Downloaded ${file}` });

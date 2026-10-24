@@ -9,7 +9,7 @@ pub(crate) trait StartupSurface {
     fn show_local(&mut self, status: &str) -> bool;
     fn present_failure(&mut self, reason: &str) -> BootOutcome;
     fn report_without_window(&mut self, reason: &str);
-    fn navigate(&mut self, url: &str);
+    fn navigate(&mut self, url: &str) -> Result<(), String>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,7 +58,7 @@ pub(crate) struct DesktopBoot<'a> {
 
 const POLL_INTERVAL: Duration = Duration::from_millis(100);
 const HEALTH_DEADLINE: Duration = Duration::from_secs(180);
-const WEBVIEW_MISSING: &str = "Microsoft Edge WebView2 runtime is not installed; install the Microsoft Edge WebView2 Runtime to run Reactive Resume";
+const WEBVIEW_MISSING: &str = "Microsoft Edge WebView2 runtime is not installed; install the Microsoft Edge WebView2 Runtime to run Fulei Resume";
 const WINDOW_UNAVAILABLE: &str = "the startup window could not be created";
 
 pub(crate) fn start(boot: &mut DesktopBoot<'_>) -> BootOutcome {
@@ -74,10 +74,27 @@ pub(crate) fn fail(
     reason: &str,
 ) -> BootOutcome {
     if let Some(app_data) = app_data {
-        let _ = std::fs::create_dir_all(app_data);
-        let _ = std::fs::write(app_data.join("boot.log"), reason);
+        append_boot_reason(app_data, reason);
     }
     surface.present_failure(reason)
+}
+
+fn append_boot_reason(app_data: &Path, reason: &str) {
+    let _ = std::fs::create_dir_all(app_data);
+    let log = app_data.join("boot.log");
+    let already_recorded = std::fs::read_to_string(&log)
+        .map(|contents| contents.lines().last() == Some(reason))
+        .unwrap_or(false);
+    if already_recorded {
+        return;
+    }
+    let mut line = reason.to_string();
+    line.push('\n');
+    let _ = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log)
+        .and_then(|mut file| std::io::Write::write_all(&mut file, line.as_bytes()));
 }
 
 fn run(boot: &mut DesktopBoot<'_>) -> Result<(), String> {
@@ -88,7 +105,7 @@ fn run(boot: &mut DesktopBoot<'_>) -> Result<(), String> {
     if port_is_busy(boot.port) {
         return Err(format!("port {} is already in use", boot.port));
     }
-    let windowed = boot.surface.show_local("Preparing the runtime");
+    let windowed = boot.surface.show_local("preparing");
     let evergreen = boot.browser.evergreen_installed();
     if !evergreen {
         boot.surface.report_without_window(WEBVIEW_MISSING);
@@ -115,7 +132,7 @@ fn run(boot: &mut DesktopBoot<'_>) -> Result<(), String> {
         &index,
         &format!("web build is missing: {}", index.display()),
     )?;
-    boot.surface.show_local("Starting the app");
+    boot.surface.show_local("launching");
     let data_dir = boot.app_data.join("data");
     std::fs::create_dir_all(&data_dir).map_err(|error| error.to_string())?;
     let pid = boot.processes.spawn_server(&ServerLaunch {
@@ -131,8 +148,13 @@ fn run(boot: &mut DesktopBoot<'_>) -> Result<(), String> {
         boot.processes.stop(pid);
         return Err(error);
     }
-    boot.surface
-        .navigate(&format!("http://127.0.0.1:{}/desktop/enter", boot.port));
+    if let Err(reason) = boot
+        .surface
+        .navigate(&format!("http://127.0.0.1:{}/desktop/enter", boot.port))
+    {
+        boot.processes.stop(pid);
+        return Err(reason);
+    }
     reclaim_legacy_runtime(boot.app_data);
     Ok(())
 }
@@ -200,7 +222,7 @@ impl SingleInstance {
         match options.open(path) {
             Ok(file) => Ok(Self { _file: file }),
             Err(error) if is_already_running(&error) => {
-                Err("Reactive Resume is already running; close the other window first".to_string())
+                Err("Fulei Resume is already running; close the other window first".to_string())
             }
             Err(error) => Err(format!("could not lock the desktop instance: {error}")),
         }
@@ -274,6 +296,7 @@ mod tests {
     struct RecordingSurface {
         events: Arc<Mutex<Vec<String>>>,
         window_available: bool,
+        navigation: Result<(), String>,
     }
 
     impl StartupSurface for RecordingSurface {
@@ -304,11 +327,12 @@ mod tests {
                 .push(format!("native:{reason}"));
         }
 
-        fn navigate(&mut self, url: &str) {
+        fn navigate(&mut self, url: &str) -> Result<(), String> {
             self.events
                 .lock()
                 .expect("events")
                 .push(format!("navigate:{url}"));
+            self.navigation.clone()
         }
     }
 
@@ -390,7 +414,7 @@ mod tests {
         }
 
         fn exe(&self) -> PathBuf {
-            self.install().join("Reactive Resume.exe")
+            self.install().join("Fulei Resume.exe")
         }
 
         fn app_data(&self) -> PathBuf {
@@ -421,7 +445,10 @@ mod tests {
         }
 
         fn boot_log(&self) -> String {
-            std::fs::read_to_string(self.app_data().join("boot.log")).expect("boot log")
+            std::fs::read_to_string(self.app_data().join("boot.log"))
+                .expect("boot log")
+                .trim_end()
+                .to_string()
         }
 
         fn legacy_runtime(&self) -> PathBuf {
@@ -525,6 +552,7 @@ mod tests {
         unhealthy_before_ok: usize,
         runtime_override: Option<PathBuf>,
         window_available: bool,
+        navigation: Result<(), String>,
     }
 
     fn boot(
@@ -541,6 +569,7 @@ mod tests {
                 unhealthy_before_ok,
                 runtime_override: None,
                 window_available: true,
+                navigation: Ok(()),
             },
         )
     }
@@ -552,6 +581,7 @@ mod tests {
         let mut surface = RecordingSurface {
             events: Arc::clone(&events),
             window_available: options.window_available,
+            navigation: options.navigation.clone(),
         };
         let mut browser = TestBrowser {
             evergreen: options.evergreen,
@@ -617,6 +647,7 @@ mod tests {
         let mut surface = RecordingSurface {
             events: Arc::clone(&events),
             window_available,
+            navigation: Ok(()),
         };
         let mut browser = TestBrowser { evergreen };
         let mut processes = NeverSpawned;
@@ -688,8 +719,8 @@ mod tests {
         assert_eq!(
             report.events,
             vec![
-                "show:Preparing the runtime".to_string(),
-                "show:Starting the app".to_string(),
+                "show:preparing".to_string(),
+                "show:launching".to_string(),
                 "spawn".to_string(),
                 format!("navigate:http://127.0.0.1:{}/desktop/enter", fixture.port),
             ]
@@ -803,7 +834,7 @@ mod tests {
         assert_eq!(
             report.events,
             vec![
-                "show:Preparing the runtime".to_string(),
+                "show:preparing".to_string(),
                 format!("native:{WEBVIEW_MISSING}"),
                 format!("failure:{WEBVIEW_MISSING}"),
             ]
@@ -827,7 +858,7 @@ mod tests {
             .expect("hold the instance lock");
 
         let report = boot_without_spawn(&fixture);
-        let reason = "Reactive Resume is already running; close the other window first";
+        let reason = "Fulei Resume is already running; close the other window first";
         assert_presented_in_the_window(&report, &fixture, reason);
         assert!(report.stopped.is_empty());
         drop(held);
@@ -847,7 +878,7 @@ mod tests {
         let shown = report
             .events
             .iter()
-            .position(|event| event == "show:Preparing the runtime")
+            .position(|event| event == "show:preparing")
             .expect("the startup page was created");
         let failed = report
             .events
@@ -1124,6 +1155,34 @@ mod tests {
     }
 
     #[test]
+    fn a_navigation_failure_is_recorded_and_never_leaves_the_splash_spinning() {
+        let fixture = Fixture::new();
+        fixture.write_runtime();
+
+        let reason = "the startup window could not navigate";
+        let report = boot_with(
+            &fixture,
+            BootOptions {
+                port: fixture.port,
+                evergreen: true,
+                unhealthy_before_ok: 0,
+                runtime_override: None,
+                window_available: true,
+                navigation: Err(reason.to_string()),
+            },
+        );
+
+        assert_eq!(report.outcome, BootOutcome::FailedInWindow);
+        assert_eq!(report.stopped, vec![77]);
+        assert!(
+            report.events.contains(&format!("failure:{reason}")),
+            "the failure never reached the window; saw {:?}",
+            report.events
+        );
+        assert_eq!(fixture.boot_log(), reason);
+    }
+
+    #[test]
     fn the_legacy_sqlite_beside_the_executable_is_handed_to_the_server() {
         let fixture = Fixture::new();
         fixture.write_runtime();
@@ -1158,6 +1217,7 @@ mod tests {
         let mut surface = RecordingSurface {
             events: Arc::new(Mutex::new(Vec::new())),
             window_available: true,
+            navigation: Ok(()),
         };
         let mut browser = TestBrowser { evergreen: true };
         let mut processes = RememberSqlite {
@@ -1231,6 +1291,7 @@ mod tests {
                 unhealthy_before_ok: 0,
                 runtime_override: Some(elsewhere),
                 window_available: true,
+                navigation: Ok(()),
             },
         );
 

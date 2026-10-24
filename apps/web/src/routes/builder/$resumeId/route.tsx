@@ -38,7 +38,7 @@ export const Route = createFileRoute("/builder/$resumeId")({
 	},
 	head: ({ loaderData }) => ({
 		meta: loaderData
-			? [{ title: `${loaderData.name} - Reactive Resume` }, createNoindexFollowMeta()]
+			? [{ title: `${loaderData.name} - Fulei Resume` }, createNoindexFollowMeta()]
 			: [createNoindexFollowMeta()],
 	}),
 });

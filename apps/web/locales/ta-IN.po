@@ -3107,6 +3107,10 @@ msgstr "அச்சிடுவதற்கு உங்கள் ரெஸ்�
 msgid "Could not revoke this connection. Try again."
 msgstr "இந்த இணைப்பை திரும்பப் பெற முடியவில்லை. மீண்டும் முயற்சிக்கவும்."
 
+#: src/features/applications/components/detail/next-step-card.tsx
+msgid "Could not save the calendar file."
+msgstr ""
+
 #: src/dialogs/auth/enable-two-factor.tsx
 msgid "Could not set up two-factor authentication."
 msgstr "இரண்டு நிலை அங்கீகாரத்தை அமைக்க முடியவில்லை."
@@ -4105,6 +4109,14 @@ msgstr "விண்ணப்ப விவரங்கள், தொடர்ப
 msgid "Download CSV"
 msgstr "CSV ஐப் பதிவிறக்கவும்"
 
+#: src/dialogs/auth/enable-two-factor.tsx
+#: src/features/applications/components/export-applications-sheet.tsx
+#: src/features/applications/components/import-applications-sheet.tsx
+#: src/features/applications/components/insights-view.tsx
+#: src/features/career/workspace/apply.tsx
+#: src/features/career/workspace/debrief.tsx
+#: src/features/career/workspace/practise.tsx
+#: src/features/career/workspace/shell.tsx
 #: src/features/resume/share/download-tab.tsx
 #: src/routes/builder/letter/-components/share-sheet.tsx
 msgid "Download failed."
@@ -4494,8 +4506,8 @@ msgid "Enhanced reading was unavailable. The built-in reader retrieved this post
 msgstr "மேம்படுத்தப்பட்ட வாசிப்பு கிடைக்கவில்லை. உள்ளமைக்கப்பட்ட வாசகர் இந்த வேலை இடுகையை மீட்டெடுத்தார்."
 
 #: src/components/ui/donation-toast.tsx
-msgid "Enjoying Reactive Resume?"
-msgstr "Reactive Resume பிடித்திருக்கிறதா?"
+msgid "Enjoying Fulei Resume?"
+msgstr ""
 
 #: src/features/career/knowledge/preferences.tsx
 msgid "Enter a full amount, such as 95000. Your previous amount is unchanged."
@@ -5151,6 +5163,10 @@ msgstr "உங்கள் செய்தியிலிருந்து"
 msgid "From your resume"
 msgstr "உங்கள் ரெஸ்யூமிலிருந்து"
 
+#: src/routes/dashboard/settings/route.tsx
+msgid "Fulei Resume {__APP_VERSION__} · MIT"
+msgstr ""
+
 #: src/features/resume/editor/write/basics-card.tsx
 msgid "Full name"
 msgstr "முழுப் பெயர்"
@@ -5241,8 +5257,8 @@ msgid "Go to…"
 msgstr "… க்குச் செல்லவும்"
 
 #: src/features/resume/share/download-tab.tsx
-msgid "Good luck out there. Reactive Resume stays free because people chip in."
-msgstr "அங்கு நல்ல அதிர்ஷ்டம். மக்கள் சிப் இன் செய்வதால் Reactive Resume இலவசம்."
+msgid "Good luck out there. Fulei Resume stays free because people chip in."
+msgstr ""
 
 #. Authentication provider display name in account settings
 #. Brand name label for Google social sign-in button
@@ -6594,8 +6610,8 @@ msgid "Lower the design sheet"
 msgstr "வடிவமைப்பு தாளைக் குறைக்கவும்"
 
 #: src/features/resume/public/public-resume.tsx
-msgid "Made with Reactive Resume, free and open source"
-msgstr "Reactive Resume, இலவச மற்றும் திறந்த மூலமாக உருவாக்கப்பட்டது"
+msgid "Made with Fulei Resume, free and open source"
+msgstr ""
 
 #. Layout editor column label for the primary content area
 #: src/routes/builder/$resumeId/-sidebar/right/sections/layout/pages.tsx
@@ -8715,10 +8731,6 @@ msgstr "Re: மூத்த தயாரிப்பு வடிவமைப்
 msgid "Reactive Resume - Go to homepage"
 msgstr "Reactive Resume - முகப்புப் பக்கத்துக்கு செல்லவும்"
 
-#: src/routes/dashboard/settings/route.tsx
-msgid "Reactive Resume {__APP_VERSION__} · MIT"
-msgstr "Reactive Resume {__APP_VERSION__} · MIT"
-
 #: src/features/homepage/hero.tsx
 msgid "Reactive Resume is a free, open-source resume builder. Write it, design it, check it, tailor it for every job and walk into the interview prepared."
 msgstr "Reactive Resume ஓர் இலவச, திறந்த மூல ரெஸ்யூம் உருவாக்கி. எழுதுங்கள், வடிவமையுங்கள், சரிபாருங்கள், ஒவ்வொரு வேலைக்கும் ஏற்ப மாற்றுங்கள், தயாராக நேர்காணலுக்குச் செல்லுங்கள்."
@@ -9697,6 +9709,10 @@ msgstr "{0} சேமிக்கப்பட்டது"
 msgid "Saved {0} to Applications"
 msgstr "{0} விண்ணப்பங்களில் சேமிக்கப்பட்டது"
 
+#: src/features/resume/share/download-tab.tsx
+msgid "Saved {file}. The cover letter was not saved."
+msgstr ""
+
 #. placeholder {0}: story.data.title
 #: src/features/career/coach-thread.tsx
 msgid "Saved a story: {0}"
@@ -9717,6 +9733,10 @@ msgstr "இப்போதுதான் சேமிக்கப்பட்�
 #: src/features/career/coach-thread.tsx
 msgid "Saved offers"
 msgstr "சேமித்த சலுகைகள்"
+
+#: src/routes/builder/letter/-components/share-sheet.tsx
+msgid "Saved the resume. The letter was not saved."
+msgstr ""
 
 #: src/features/career/today.tsx
 msgid "Saved to Applications"

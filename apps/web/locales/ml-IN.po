@@ -3107,6 +3107,10 @@ msgstr "പ്രിന്റിംഗിനായി നിങ്ങളുട�
 msgid "Could not revoke this connection. Try again."
 msgstr "ഈ കണക്ഷൻ അസാധുവാക്കാൻ കഴിഞ്ഞില്ല. വീണ്ടും ശ്രമിക്കുക."
 
+#: src/features/applications/components/detail/next-step-card.tsx
+msgid "Could not save the calendar file."
+msgstr ""
+
 #: src/dialogs/auth/enable-two-factor.tsx
 msgid "Could not set up two-factor authentication."
 msgstr "ടു-ഫാക്ടർ ഓത്‌ന്റിക്കേഷൻ സജ്ജമാക്കാനായില്ല."
@@ -4105,6 +4109,14 @@ msgstr "അപേക്ഷയുടെ വിശദാംശങ്ങൾ, കോ
 msgid "Download CSV"
 msgstr "CSV ഡൗൺലോഡ് ചെയ്യുക"
 
+#: src/dialogs/auth/enable-two-factor.tsx
+#: src/features/applications/components/export-applications-sheet.tsx
+#: src/features/applications/components/import-applications-sheet.tsx
+#: src/features/applications/components/insights-view.tsx
+#: src/features/career/workspace/apply.tsx
+#: src/features/career/workspace/debrief.tsx
+#: src/features/career/workspace/practise.tsx
+#: src/features/career/workspace/shell.tsx
 #: src/features/resume/share/download-tab.tsx
 #: src/routes/builder/letter/-components/share-sheet.tsx
 msgid "Download failed."
@@ -4494,8 +4506,8 @@ msgid "Enhanced reading was unavailable. The built-in reader retrieved this post
 msgstr "മെച്ചപ്പെടുത്തിയ വായന ലഭ്യമല്ല. ബിൽറ്റ്-ഇൻ റീഡർ ഈ ജോലി പോസ്റ്റിംഗ് വീണ്ടെടുത്തു."
 
 #: src/components/ui/donation-toast.tsx
-msgid "Enjoying Reactive Resume?"
-msgstr "Reactive Resume ഇഷ്ടമാകുന്നുണ്ടോ?"
+msgid "Enjoying Fulei Resume?"
+msgstr ""
 
 #: src/features/career/knowledge/preferences.tsx
 msgid "Enter a full amount, such as 95000. Your previous amount is unchanged."
@@ -5151,6 +5163,10 @@ msgstr "നിങ്ങളുടെ സന്ദേശത്തിൽ നിന�
 msgid "From your resume"
 msgstr "നിങ്ങളുടെ റെസ്യൂമെയിൽ നിന്ന്"
 
+#: src/routes/dashboard/settings/route.tsx
+msgid "Fulei Resume {__APP_VERSION__} · MIT"
+msgstr ""
+
 #: src/features/resume/editor/write/basics-card.tsx
 msgid "Full name"
 msgstr "പൂർണ്ണമായ പേര്"
@@ -5241,8 +5257,8 @@ msgid "Go to…"
 msgstr "… എന്നതിലേക്ക് പോകുക"
 
 #: src/features/resume/share/download-tab.tsx
-msgid "Good luck out there. Reactive Resume stays free because people chip in."
-msgstr "അവിടെ ഭാഗ്യം. ആളുകൾ ചിപ്പ് ഇൻ ചെയ്യുന്നതിനാൽ Reactive Resume സൗജന്യമായി തുടരുന്നു."
+msgid "Good luck out there. Fulei Resume stays free because people chip in."
+msgstr ""
 
 #. Authentication provider display name in account settings
 #. Brand name label for Google social sign-in button
@@ -6594,8 +6610,8 @@ msgid "Lower the design sheet"
 msgstr "ഡിസൈൻ ഷീറ്റ് താഴ്ത്തുക"
 
 #: src/features/resume/public/public-resume.tsx
-msgid "Made with Reactive Resume, free and open source"
-msgstr "Reactive Resume ഉപയോഗിച്ച് നിർമ്മിച്ചത്, സ്വതന്ത്രവും ഓപ്പൺ സോഴ്‌സും"
+msgid "Made with Fulei Resume, free and open source"
+msgstr ""
 
 #. Layout editor column label for the primary content area
 #: src/routes/builder/$resumeId/-sidebar/right/sections/layout/pages.tsx
@@ -8715,10 +8731,6 @@ msgstr "Re: സീനിയർ പ്രോഡക്റ്റ് ഡിസൈന
 msgid "Reactive Resume - Go to homepage"
 msgstr "Reactive Resume - ഹോംപേജിലേക്കു പോകുക"
 
-#: src/routes/dashboard/settings/route.tsx
-msgid "Reactive Resume {__APP_VERSION__} · MIT"
-msgstr "Reactive Resume {__APP_VERSION__} · MIT"
-
 #: src/features/homepage/hero.tsx
 msgid "Reactive Resume is a free, open-source resume builder. Write it, design it, check it, tailor it for every job and walk into the interview prepared."
 msgstr "Reactive Resume ഒരു സൗജന്യ, ഓപ്പൺ സോഴ്‌സ് റെസ്യൂമെ ബിൽഡറാണ്. എഴുതുക, ഡിസൈൻ ചെയ്യുക, പരിശോധിക്കുക, ഓരോ ജോലിക്കും അനുസരിച്ച് ക്രമീകരിക്കുക, തയ്യാറെടുപ്പോടെ അഭിമുഖത്തിന് പോകുക."
@@ -9697,6 +9709,10 @@ msgstr "{0} സംരക്ഷിച്ചു"
 msgid "Saved {0} to Applications"
 msgstr "{0} അപേക്ഷകളിലേക്ക് സേവ് ചെയ്തു"
 
+#: src/features/resume/share/download-tab.tsx
+msgid "Saved {file}. The cover letter was not saved."
+msgstr ""
+
 #. placeholder {0}: story.data.title
 #: src/features/career/coach-thread.tsx
 msgid "Saved a story: {0}"
@@ -9717,6 +9733,10 @@ msgstr "ഇപ്പോൾ സേവ് ചെയ്തു"
 #: src/features/career/coach-thread.tsx
 msgid "Saved offers"
 msgstr "സംരക്ഷിച്ച ഓഫറുകൾ"
+
+#: src/routes/builder/letter/-components/share-sheet.tsx
+msgid "Saved the resume. The letter was not saved."
+msgstr ""
 
 #: src/features/career/today.tsx
 msgid "Saved to Applications"

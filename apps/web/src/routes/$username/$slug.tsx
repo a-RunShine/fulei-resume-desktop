@@ -39,7 +39,7 @@ export const Route = createFileRoute("/$username/$slug")({
 
 		return {
 			meta: [
-				{ title: `${social.name} - Reactive Resume` },
+				{ title: `${social.name} - Fulei Resume` },
 				{ name: "description", content: social.description },
 				createNoindexFollowMeta(),
 			],

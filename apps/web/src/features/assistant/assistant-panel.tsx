@@ -25,6 +25,7 @@ import { cn } from "@reactive-resume/utils/style";
 import { useConversationConnection } from "./chat";
 import { Composer, Conversation } from "./conversation";
 import { ProviderSetup } from "./provider-setup";
+import { EmptyStateArt } from "@/components/ui/empty-state-art";
 import { useEditorStore } from "@/features/resume/editor/store";
 import { formatVersionTime } from "@/features/resume/share/format";
 import { AiProviderLoadState } from "@/features/settings/integrations/ai-provider-load-state";
@@ -407,6 +408,7 @@ function EmptyState({ document, disabled, onPick }: EmptyStateProps) {
 
 	return (
 		<div className="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto p-4">
+			<EmptyStateArt variant="assistant" size={96} className="mx-auto" />
 			<div className="grid gap-1.5">
 				<h3 className="font-display text-[22px] leading-7 font-medium">
 					<Trans>What should we work on?</Trans>

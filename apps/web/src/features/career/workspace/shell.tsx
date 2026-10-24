@@ -16,8 +16,8 @@ import { Button, buttonVariants } from "@reactive-resume/ui/components/button";
 import { Icon } from "@reactive-resume/ui/components/icon";
 import { Spinner } from "@reactive-resume/ui/components/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@reactive-resume/ui/components/tabs";
+import { toast } from "@reactive-resume/ui/components/toast";
 import { useBreakpoint } from "@reactive-resume/ui/hooks/use-breakpoint";
-import { downloadWithAnchor } from "@reactive-resume/utils/file";
 import { getInitials } from "@reactive-resume/utils/string";
 import { cn } from "@reactive-resume/utils/style";
 import { useOverlayHistory, useSavedItems } from "../hooks";
@@ -36,6 +36,8 @@ import { buildIcs } from "@/features/applications/ics";
 import { formatDuration, interviewKindOf, isInterview } from "@/features/applications/interviews";
 import { describeNextStep, getNextStep } from "@/features/applications/next-step";
 import { getStageLabel, PIPELINE } from "@/features/applications/stages";
+import { downloadFile } from "@/features/resume/export/save-file";
+import { getReadableErrorMessage } from "@/libs/error-message";
 import { D1, EASE } from "@/libs/motion";
 import { orpc } from "@/libs/orpc/client";
 
@@ -483,7 +485,7 @@ function ContextColumn({ application, interview, now, onEdit }: ContextColumnPro
 	const documentsFailed = missingDocument && (documents.isError || (hasSentVersion && trashed.isError));
 	const sent = application.status !== "saved";
 
-	const addToCalendar = () => {
+	const addToCalendar = async () => {
 		if (!upcoming) return;
 		const start = new Date(upcoming.at);
 		const people = upcoming.participants.map((person) => [person.name, person.role].filter(Boolean).join(", "));
@@ -495,10 +497,14 @@ function ContextColumn({ application, interview, now, onEdit }: ContextColumnPro
 			...(upcoming.location ? { location: upcoming.location } : {}),
 			description: [people.join("\n"), upcoming.notes].filter(Boolean).join("\n\n"),
 		});
-		downloadWithAnchor(
-			new Blob([ics], { type: "text/calendar" }),
-			`${application.company}-interview.ics`.replace(/[^\w.-]+/g, "-"),
-		);
+		try {
+			await downloadFile({
+				blob: new Blob([ics], { type: "text/calendar" }),
+				suggestedName: `${application.company}-interview.ics`.replace(/[^\w.-]+/g, "-"),
+			});
+		} catch (error) {
+			toast.add({ type: "error", description: getReadableErrorMessage(error, t`Download failed.`) });
+		}
 	};
 
 	return (

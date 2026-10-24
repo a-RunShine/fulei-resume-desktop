@@ -43,10 +43,20 @@ it("never bundles or downloads a WebView2 runtime", () => {
 it("names the main binary like the product while keeping the frontend build", () => {
 	const config = readConfig();
 
-	expect(config.productName).toBe("Reactive Resume");
-	expect(config.mainBinaryName).toBe("Reactive Resume");
+	expect(config.productName).toBe("Fulei Resume");
+	expect(config.mainBinaryName).toBe("Fulei Resume");
 	expect(config.build?.frontendDist).toBe("../../web/dist");
 	expect(config.build?.beforeBuildCommand).toBeTruthy();
+});
+
+it("ships the generated icon set so the installer and taskbar show the brand mark", () => {
+	const icons = fs.readdirSync(path.join(srcTauriDir, "icons"));
+	expect(icons).toContain("icon.ico");
+	expect(icons).not.toContain("android");
+	expect(icons).not.toContain("ios");
+
+	const ico = fs.statSync(path.join(srcTauriDir, "icons", "icon.ico"));
+	expect(ico.size).toBeGreaterThan(4096);
 });
 
 it("maps the staged runtime to the install root so node, server and web sit beside the executable", () => {
@@ -101,10 +111,10 @@ it("deletes the app data directory only when the uninstall checkbox is ticked ou
 	expect(hooks).toContain("!macroend");
 	expect(hooks).toContain("$DeleteAppDataCheckboxState = 1");
 	expect(hooks).toContain("$UpdateMode <> 1");
-	expect(hooks).toContain('RMDir /r "$LOCALAPPDATA\\Reactive Resume"');
+	expect(hooks).toContain('RMDir /r "$LOCALAPPDATA\\Fulei Resume"');
 	expect(hooks).toContain("${AndIf}");
 
-	const deleteIndex = hooks.indexOf('RMDir /r "$LOCALAPPDATA\\Reactive Resume"');
+	const deleteIndex = hooks.indexOf('RMDir /r "$LOCALAPPDATA\\Fulei Resume"');
 	expect(hooks.indexOf("$DeleteAppDataCheckboxState = 1")).toBeLessThan(deleteIndex);
 	expect(hooks.indexOf("$UpdateMode <> 1")).toBeLessThan(deleteIndex);
 });
@@ -116,5 +126,5 @@ it("removes nothing except the app data directory from the uninstall hook", () =
 		.map((line) => line.trim())
 		.filter((line) => line.startsWith("RMDir") || line.startsWith("Delete"));
 
-	expect(removalLines).toEqual(['RMDir /r "$LOCALAPPDATA\\Reactive Resume"']);
+	expect(removalLines).toEqual(['RMDir /r "$LOCALAPPDATA\\Fulei Resume"']);
 });

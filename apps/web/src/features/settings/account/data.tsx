@@ -16,10 +16,10 @@ import {
 import { Button } from "@reactive-resume/ui/components/button";
 import { Input } from "@reactive-resume/ui/components/input";
 import { toast } from "@reactive-resume/ui/components/toast";
-import { downloadWithAnchor } from "@reactive-resume/utils/file";
 import { SettingsRow, SettingsSection } from "../section";
 import { buildAccountZip } from "./export";
 import { applicationsListQueryOptions } from "@/features/applications/queries";
+import { downloadFile } from "@/features/resume/export/save-file";
 import { authClient } from "@/libs/auth/client";
 import { getReadableErrorMessage } from "@/libs/error-message";
 import { client, orpc } from "@/libs/orpc/client";
@@ -33,7 +33,10 @@ export function DataSection() {
 		mutationFn: async () => {
 			const zip = buildAccountZip(await client.auth.exportData());
 			const date = new Date().toISOString().slice(0, 10);
-			downloadWithAnchor(new Blob([zip as BlobPart], { type: "application/zip" }), `reactive-resume-${date}.zip`);
+			await downloadFile({
+				blob: new Blob([zip as BlobPart], { type: "application/zip" }),
+				suggestedName: `fulei-resume-${date}.zip`,
+			});
 		},
 		onError: (error) =>
 			toast.add({ type: "error", description: getReadableErrorMessage(error, t`Couldn't export. Try again.`) }),

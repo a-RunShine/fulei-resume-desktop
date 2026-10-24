@@ -17,9 +17,10 @@ import {
 } from "@reactive-resume/ui/components/sheet";
 import { Textarea } from "@reactive-resume/ui/components/textarea";
 import { toast } from "@reactive-resume/ui/components/toast";
-import { downloadWithAnchor } from "@reactive-resume/utils/file";
 import { autoMapHeaders, CSV_FIELDS, mapCsvToApplications, parseCsv, rowsToCsv } from "../csv";
 import { useInvalidateApplications } from "../use-application-actions";
+import { downloadFile } from "@/features/resume/export/save-file";
+import { getReadableErrorMessage } from "@/libs/error-message";
 import { orpc } from "@/libs/orpc/client";
 
 const MAX_IMPORT = 500;
@@ -94,10 +95,14 @@ export function ImportApplicationsSheet({ open, onOpenChange }: ImportSheetProps
 		onError: () => toast.add({ type: "error", description: t`Import failed. Check the CSV and try again.` }),
 	});
 
-	const downloadSkipped = () => {
+	const downloadSkipped = async () => {
 		if (!result || result.skippedRows.length === 0) return;
 		const blob = new Blob([rowsToCsv(headers, result.skippedRows)], { type: "text/csv" });
-		downloadWithAnchor(blob, "skipped-applications.csv");
+		try {
+			await downloadFile({ blob, suggestedName: "skipped-applications.csv" });
+		} catch (error) {
+			toast.add({ type: "error", description: getReadableErrorMessage(error, t`Download failed.`) });
+		}
 	};
 
 	return (
