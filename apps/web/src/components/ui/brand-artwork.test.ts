@@ -73,4 +73,18 @@ describe("shipped brand artwork", () => {
 		expect(source).toContain("<rect");
 		expect(source).toContain("<path");
 	});
+
+	it("draws the favicon on the desktop tile so the tab and the taskbar agree", () => {
+		const source = read("favicon.svg");
+
+		expect(source).toContain('fill="#F8F7F3"');
+		expect(source).toContain('fill="#111111"');
+	});
+
+	it("keeps the favicon free of the Resume line, which a 16px tab cannot resolve", () => {
+		const source = read("favicon.svg");
+
+		expect((source.match(/<path/g) ?? []).length).toBe(5);
+		expect(source).not.toContain("<text");
+	});
 });

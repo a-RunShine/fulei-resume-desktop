@@ -1,6 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 143.98 143.98" width="512" height="512" role="img" aria-label="Fulei Resume">
-  <rect x="0" y="0" width="143.98" height="143.98" rx="31.68" fill="#337344"/>
-  <g transform="translate(9.17 104.92)">
-    <path d="M6.83 -65.86H57.14V-51.71H27.27V-40.21H52.78V-26.91H27.27V0.00H6.83Z M66.70 -65.86H87.05V-16.22H118.81V0.00H66.70Z" fill="#FEFDFC"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Fulei Resume">
+  <rect x="32" y="32" width="448" height="448" rx="96" fill="#F8F7F3"/>
+  <g transform="translate(-42.19 24.79) scale(1.1648)" fill="#111111">
+    <path d="M106 84 H147 V313 H106 Z"/>
+    <path d="M147 84 H298 L287 98 H147 Z"/>
+    <path d="M147 230 H261 L250 244 H147 Z"/>
+    <path d="M313 84 H354 V313 H313 Z"/>
+    <path d="M313 292 H406 L395 313 H313 Z"/>
   </g>
 </svg>

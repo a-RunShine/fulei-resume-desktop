@@ -810,15 +810,12 @@ fn record_boot_event(reason: &str) {
         .and_then(|mut file| std::io::Write::write_all(&mut file, line.as_bytes()));
 }
 
-const SPLASH_MARK: &str = r##"<svg class="mark" viewBox="0 0 100 100" role="img" aria-label="Fulei Resume">
-<rect x="0" y="0" width="100" height="100" rx="26" fill="#337344"/>
-<rect x="17" y="9" width="56" height="74" rx="13" fill="#FEFDFC"/>
-<line x1="27" y1="25" x2="46" y2="25" stroke="#337344" stroke-width="5.5" stroke-linecap="round"/>
-<line x1="27" y1="36" x2="60" y2="36" stroke="#337344" stroke-width="4" stroke-linecap="round" opacity="0.45"/>
-<rect x="27" y="55" width="10" height="18" rx="5" fill="#337344" opacity="0.35"/>
-<rect x="41" y="46" width="10" height="27" rx="5" fill="#337344" opacity="0.65"/>
-<rect x="55" y="37" width="10" height="36" rx="5" fill="#337344"/>
-<path d="M78 8 L81.5 16 L90 17.2 L83.8 22.4 L86.2 30.5 L78 25.8 L69.8 30.5 L72.2 22.4 L66 17.2 L74.5 16 Z" fill="#F8F7F3" stroke="#337344" stroke-width="2.2" stroke-linejoin="round"/>
+const SPLASH_MARK: &str = r##"<svg class="mark" viewBox="56.00 49.91 114 111.09" role="img" aria-label="Fulei Resume">
+<path d="M62.16 51.91H92.78V60.53H74.60V67.53H90.13V75.62H74.60V92.00H62.16Z M98.45 51.91H110.84V82.13H130.17V92.00H98.45Z" fill="#111111"/>
+<path d="M59.90 122.00V103.39H67.81Q70.80 103.39 72.15 103.89Q73.50 104.39 74.31 105.67Q75.13 106.96 75.13 108.61Q75.13 110.70 73.89 112.07Q72.66 113.43 70.21 113.79Q71.43 114.50 72.23 115.35Q73.02 116.20 74.36 118.37L76.64 122.00H72.14L69.43 117.95Q67.98 115.78 67.45 115.21Q66.91 114.65 66.32 114.44Q65.72 114.23 64.42 114.23H63.66V122.00ZM63.66 111.26H66.44Q69.15 111.26 69.82 111.03Q70.49 110.80 70.87 110.24Q71.25 109.69 71.25 108.85Q71.25 107.91 70.75 107.33Q70.25 106.75 69.34 106.60Q68.88 106.54 66.59 106.54H63.66Z M86.45 117.71 90.00 118.31Q89.32 120.26 87.84 121.28Q86.36 122.30 84.14 122.30Q80.62 122.30 78.93 120.01Q77.60 118.17 77.60 115.36Q77.60 112.01 79.35 110.11Q81.11 108.21 83.78 108.21Q86.79 108.21 88.53 110.20Q90.27 112.19 90.20 116.29H81.26Q81.30 117.87 82.12 118.76Q82.95 119.64 84.18 119.64Q85.02 119.64 85.59 119.18Q86.16 118.72 86.45 117.71ZM86.65 114.10Q86.62 112.55 85.85 111.75Q85.09 110.94 84.00 110.94Q82.83 110.94 82.07 111.79Q81.31 112.64 81.32 114.10Z M91.85 118.15 95.43 117.61Q95.65 118.65 96.35 119.19Q97.05 119.73 98.31 119.73Q99.69 119.73 100.39 119.22Q100.86 118.86 100.86 118.27Q100.86 117.86 100.61 117.59Q100.34 117.34 99.41 117.12Q95.10 116.17 93.94 115.39Q92.34 114.29 92.34 112.35Q92.34 110.60 93.72 109.41Q95.11 108.21 98.02 108.21Q100.78 108.21 102.13 109.11Q103.47 110.02 103.98 111.78L100.62 112.40Q100.40 111.62 99.80 111.20Q99.20 110.78 98.08 110.78Q96.67 110.78 96.06 111.17Q95.65 111.45 95.65 111.89Q95.65 112.28 96.01 112.54Q96.49 112.90 99.34 113.54Q102.19 114.19 103.32 115.13Q104.44 116.08 104.44 117.79Q104.44 119.64 102.89 120.97Q101.34 122.30 98.31 122.30Q95.55 122.30 93.95 121.19Q92.34 120.07 91.85 118.15Z M116.44 122.00V119.98Q115.70 121.06 114.50 121.68Q113.30 122.30 111.97 122.30Q110.61 122.30 109.53 121.71Q108.45 121.11 107.97 120.03Q107.49 118.95 107.49 117.05V108.52H111.05V114.71Q111.05 117.56 111.25 118.20Q111.45 118.84 111.97 119.21Q112.49 119.59 113.29 119.59Q114.20 119.59 114.93 119.09Q115.65 118.58 115.92 117.84Q116.18 117.10 116.18 114.21V108.52H119.75V122.00Z M123.18 108.52H126.47V110.36Q128.23 108.21 130.67 108.21Q131.96 108.21 132.92 108.75Q133.87 109.28 134.48 110.36Q135.37 109.28 136.39 108.75Q137.42 108.21 138.59 108.21Q140.08 108.21 141.10 108.82Q142.13 109.42 142.64 110.59Q143.01 111.45 143.01 113.38V122.00H139.44V114.29Q139.44 112.29 139.07 111.70Q138.58 110.94 137.55 110.94Q136.80 110.94 136.14 111.40Q135.48 111.86 135.19 112.74Q134.90 113.62 134.90 115.53V122.00H131.33V114.61Q131.33 112.64 131.14 112.07Q130.95 111.50 130.55 111.22Q130.15 110.94 129.46 110.94Q128.64 110.94 127.98 111.39Q127.32 111.83 127.03 112.67Q126.75 113.51 126.75 115.45V122.00H123.18Z M154.37 117.71 157.92 118.31Q157.24 120.26 155.76 121.28Q154.28 122.30 152.06 122.30Q148.54 122.30 146.85 120.01Q145.52 118.17 145.52 115.36Q145.52 112.01 147.27 110.11Q149.03 108.21 151.70 108.21Q154.71 108.21 156.45 110.20Q158.19 112.19 158.12 116.29H149.18Q149.22 117.87 150.04 118.76Q150.87 119.64 152.10 119.64Q152.94 119.64 153.51 119.18Q154.08 118.72 154.37 117.71ZM154.57 114.10Q154.54 112.55 153.77 111.75Q153.01 110.94 151.92 110.94Q150.75 110.94 149.99 111.79Q149.23 112.64 149.24 114.10Z" fill="#111111"/>
+<rect x="58" y="134" width="110" height="5" rx="2.5" fill="#D6D6D6"/>
+<rect x="58" y="144" width="92" height="5" rx="2.5" fill="#D6D6D6"/>
+<rect x="58" y="154" width="64" height="5" rx="2.5" fill="#D6D6D6"/>
 </svg>"##;
 
 const SPLASH_TEMPLATE: &str = r##"<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><title>Fulei Resume</title>
@@ -826,11 +823,10 @@ const SPLASH_TEMPLATE: &str = r##"<!DOCTYPE html><html lang="zh-CN"><head><meta 
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
 body{background:#F8F7F3;display:grid;place-items:center;overflow:hidden;font-family:"PingFang SC","Microsoft YaHei","Noto Sans SC",sans-serif}
-.stage{display:flex;flex-direction:column;align-items:center;gap:26px;opacity:0;animation:markIn .5s ease-out forwards}
-.mark{width:132px;height:132px;display:block;animation:breathe 2.4s ease-in-out infinite}
-.wordmark{font-family:"Songti SC","SimSun","Noto Serif SC",Georgia,serif;font-size:34px;letter-spacing:.5px;color:#337344;white-space:nowrap}
-.spinner{width:28px;height:28px;border-radius:50%;border:3px solid rgba(51,115,68,.18);border-top-color:#337344;animation:spin .8s linear infinite}
-.launching .spinner{border-top-color:#2a5f38;animation-duration:.45s}
+.stage{display:flex;flex-direction:column;align-items:center;gap:30px;opacity:0;animation:markIn .5s ease-out forwards}
+.mark{width:156px;height:auto;display:block;animation:breathe 2.4s ease-in-out infinite}
+.spinner{width:28px;height:28px;border-radius:50%;border:3px solid rgba(17,17,17,.14);border-top-color:#111111;animation:spin .8s linear infinite}
+.launching .spinner{border-top-color:#3d3d3d;animation-duration:.45s}
 .launching .mark{animation-duration:1.4s}
 .reason{display:none;max-width:min(78vw,720px);color:#9a3412;font-size:14px;line-height:1.6;text-align:center;word-break:break-word}
 .failed .spinner{display:none}
@@ -838,9 +834,9 @@ body{background:#F8F7F3;display:grid;place-items:center;overflow:hidden;font-fam
 .failed .mark{animation:none;opacity:1}
 @keyframes markIn{to{opacity:1}}
 @keyframes spin{to{transform:rotate(360deg)}}
-@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
 </style></head>
-<body class="__STAGE__"><div class="stage">__MARK__<div class="wordmark">Fulei Resume</div><div class="spinner" role="progressbar" aria-label="Loading"></div><p class="reason">__REASON__</p></div></body></html>"##;
+<body class="__STAGE__"><div class="stage">__MARK__<div class="spinner" role="progressbar" aria-label="Loading"></div><p class="reason">__REASON__</p></div></body></html>"##;
 
 fn startup_document(stage: &str) -> String {
     SPLASH_TEMPLATE
