@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { detectionRuntime, saveFile } from "./save-file";
+import { saveFile } from "./save-file";
+import { detectionRuntime } from "@/libs/desktop-runtime";
 
 const download = vi.hoisted(() => vi.fn());
 

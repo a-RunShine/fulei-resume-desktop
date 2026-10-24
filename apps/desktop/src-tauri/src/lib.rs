@@ -747,18 +747,61 @@ impl StartupSurface for GuiSurface {
         show_native_message(reason);
     }
 
-    fn navigate(&mut self, url: &str) {
+    fn navigate(&mut self, url: &str) -> Result<(), String> {
         let url = url.to_string();
         let window = Arc::clone(&self.window);
-        let _ = self.app.run_on_main_thread(move || {
-            let guard = window.lock().expect("window");
-            if let Some(window) = guard.as_ref() {
-                if let Ok(parsed) = url.parse() {
-                    let _ = window.navigate(parsed);
-                }
-            }
-        });
+        let (sender, receiver) = std::sync::mpsc::channel();
+        self.app
+            .run_on_main_thread(move || {
+                let outcome = navigate_on_main_thread(&window, &url);
+                let _ = sender.send(outcome);
+            })
+            .map_err(|error| {
+                let reason = format!("the main thread refused the navigation request: {error}");
+                record_boot_event(&reason);
+                reason
+            })?;
+        receiver.recv().map_err(|error| {
+            let reason = format!("the navigation result was lost: {error}");
+            record_boot_event(&reason);
+            reason
+        })?
     }
+}
+
+fn navigate_on_main_thread(window: &Arc<Mutex<Option<tauri::WebviewWindow>>>, url: &str) -> Result<(), String> {
+    let guard = window.lock().map_err(|error| {
+        let reason = format!("the startup window could not be reached: {error}");
+        record_boot_event(&reason);
+        reason
+    })?;
+    let Some(window) = guard.as_ref() else {
+        let reason = "there is no startup window to navigate".to_string();
+        record_boot_event(&reason);
+        return Err(reason);
+    };
+    let parsed = url.parse().map_err(|error| {
+        let reason = format!("the startup address could not be parsed: {error}");
+        record_boot_event(&reason);
+        reason
+    })?;
+    window.navigate(parsed).map_err(|error| {
+        let reason = format!("the startup window could not navigate: {error}");
+        record_boot_event(&reason);
+        reason
+    })
+}
+
+fn record_boot_event(reason: &str) {
+    eprintln!("[desktop] {reason}");
+    let Ok(directory) = desktop_app_data() else {
+        return;
+    };
+    let log = directory.join("boot.log");
+    if let Some(parent) = log.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = std::fs::write(&log, reason);
 }
 
 const SPLASH_MARK: &str = r##"<svg class="mark" viewBox="0 0 100 100" role="img" aria-label="Fulei Resume">

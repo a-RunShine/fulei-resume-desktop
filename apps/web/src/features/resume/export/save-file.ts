@@ -1,4 +1,5 @@
 import { downloadWithAnchor } from "@reactive-resume/utils/file";
+import { detectionRuntime } from "@/libs/desktop-runtime";
 
 export type SaveTarget = {
 	suggestedName: string;
@@ -7,8 +8,7 @@ export type SaveTarget = {
 
 export type SaveDestination = "desktop" | "browser";
 
-export const detectionRuntime = (scope: unknown): SaveDestination =>
-	typeof scope === "object" && scope !== null && "__TAURI_INTERNALS__" in scope ? "desktop" : "browser";
+export { detectionRuntime };
 
 const saveThroughDialog = async ({ suggestedName, blob }: SaveTarget) => {
 	const [{ save }, { writeFile }, { downloadDir, join }] = await Promise.all([
@@ -34,4 +34,8 @@ export async function saveFile(
 	}
 
 	await dialog(target);
+}
+
+export async function downloadFile(target: SaveTarget, dialog?: (target: SaveTarget) => Promise<void>) {
+	await saveFile(target, detectionRuntime(globalThis), dialog);
 }
