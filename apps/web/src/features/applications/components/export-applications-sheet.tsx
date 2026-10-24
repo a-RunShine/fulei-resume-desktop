@@ -14,9 +14,11 @@ import {
 	SheetHeader,
 	SheetTitle,
 } from "@reactive-resume/ui/components/sheet";
-import { downloadWithAnchor } from "@reactive-resume/utils/file";
+import { toast } from "@reactive-resume/ui/components/toast";
 import { exportApplicationsCsv, selectApplicationsForExport } from "../csv";
 import { Combobox } from "@/components/ui/combobox";
+import { downloadFile } from "@/features/resume/export/save-file";
+import { getReadableErrorMessage } from "@/libs/error-message";
 
 type ExportApplicationsSheetProps = {
 	open: boolean;
@@ -46,12 +48,19 @@ export function ExportApplicationsSheet({ open, onOpenChange, applications, filt
 				</SheetHeader>
 				<form
 					className="flex min-h-0 flex-1 flex-col"
-					onSubmit={(event) => {
+					onSubmit={async (event) => {
 						event.preventDefault();
 						if (!validRange || selected.length === 0) return;
 						const blob = new Blob([exportApplicationsCsv(selected)], { type: "text/csv;charset=utf-8" });
-						downloadWithAnchor(blob, `applications-${new Date().toISOString().slice(0, 10)}.csv`);
-						onOpenChange(false);
+						try {
+							await downloadFile({
+								blob,
+								suggestedName: `applications-${new Date().toISOString().slice(0, 10)}.csv`,
+							});
+							onOpenChange(false);
+						} catch (error) {
+							toast.add({ type: "error", description: getReadableErrorMessage(error, t`Download failed.`) });
+						}
 					}}
 				>
 					<div className="-mt-1 flex flex-1 flex-col gap-4 overflow-y-auto px-4 pt-1 pb-4">

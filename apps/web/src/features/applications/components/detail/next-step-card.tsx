@@ -24,12 +24,13 @@ import { Icon } from "@reactive-resume/ui/components/icon";
 import { Input } from "@reactive-resume/ui/components/input";
 import { Label } from "@reactive-resume/ui/components/label";
 import { toast } from "@reactive-resume/ui/components/toast";
-import { downloadWithAnchor } from "@reactive-resume/utils/file";
 import { cn } from "@reactive-resume/utils/style";
 import { buildIcs } from "../../ics";
 import { dayKey } from "../../interviews";
 import { describeNextStep, getNextStep } from "../../next-step";
 import { useInvalidateApplications } from "../../use-application-actions";
+import { downloadFile } from "@/features/resume/export/save-file";
+import { getReadableErrorMessage } from "@/libs/error-message";
 import { orpc } from "@/libs/orpc/client";
 
 type NextStepCardProps = {
@@ -47,7 +48,7 @@ export function NextStepCard({ application, onScheduleInterview }: NextStepCardP
 	const step = getNextStep(application);
 	const text = describeNextStep(step, application, i18n.locale);
 
-	const addToCalendar = () => {
+	const addToCalendar = async () => {
 		if (step.kind !== "interview" && step.kind !== "follow-up") return;
 		const start = step.at;
 		const minutes = step.kind === "interview" ? step.interview.durationMinutes : 30;
@@ -60,7 +61,14 @@ export function NextStepCard({ application, onScheduleInterview }: NextStepCardP
 			...(step.kind === "interview" && step.interview.notes ? { description: step.interview.notes } : {}),
 		});
 		const blob = new Blob([ics], { type: "text/calendar" });
-		downloadWithAnchor(blob, `${application.company}-${dayKey(start)}.ics`.replace(/[^\w.-]+/g, "-"));
+		try {
+			await downloadFile({
+				blob,
+				suggestedName: `${application.company}-${dayKey(start)}.ics`.replace(/[^\w.-]+/g, "-"),
+			});
+		} catch (error) {
+			toast.add({ type: "error", description: getReadableErrorMessage(error, t`Could not save the calendar file.`) });
+		}
 	};
 
 	return (

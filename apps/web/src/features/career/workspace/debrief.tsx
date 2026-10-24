@@ -15,14 +15,14 @@ import { Label } from "@reactive-resume/ui/components/label";
 import { Skeleton } from "@reactive-resume/ui/components/skeleton";
 import { Textarea } from "@reactive-resume/ui/components/textarea";
 import { toast } from "@reactive-resume/ui/components/toast";
-import { downloadWithAnchor } from "@reactive-resume/utils/file";
 import { cn } from "@reactive-resume/utils/style";
 import { latest, useDefaultProvider, useGenerate, useSavedItems, useTicks } from "../hooks";
 import { FilterChip, MemoryProposal, PrivacyLine, useCareerTime, Working, workingSteps } from "../shared";
 import { buildIcs } from "@/features/applications/ics";
 import { isInterview } from "@/features/applications/interviews";
+import { downloadFile } from "@/features/resume/export/save-file";
 import { AiProviderLoadState } from "@/features/settings/integrations/ai-provider-load-state";
-import { getOrpcErrorMessage } from "@/libs/error-message";
+import { getOrpcErrorMessage, getReadableErrorMessage } from "@/libs/error-message";
 import { ENTER_CLASS } from "@/libs/motion";
 import { orpc } from "@/libs/orpc/client";
 
@@ -403,7 +403,7 @@ function WeekPlan({ application, review, now, readOnly }: WeekPlanProps) {
 	const minutes = rows.reduce((sum, row) => sum + row.minutes, 0);
 	const company = application.company;
 
-	const addToCalendar = () => {
+	const addToCalendar = async () => {
 		const ics = buildIcs(
 			rows.map((row) => ({
 				uid: `${review.id}-${row.key}`,
@@ -413,10 +413,14 @@ function WeekPlan({ application, review, now, readOnly }: WeekPlanProps) {
 				description: t`Practice for your ${company} interviews.`,
 			})),
 		);
-		downloadWithAnchor(
-			new Blob([ics], { type: "text/calendar" }),
-			`${company}-practice-week.ics`.replace(/[^\w.-]+/g, "-"),
-		);
+		try {
+			await downloadFile({
+				blob: new Blob([ics], { type: "text/calendar" }),
+				suggestedName: `${company}-practice-week.ics`.replace(/[^\w.-]+/g, "-"),
+			});
+		} catch (error) {
+			toast.add({ type: "error", description: getReadableErrorMessage(error, t`Download failed.`) });
+		}
 	};
 
 	return (

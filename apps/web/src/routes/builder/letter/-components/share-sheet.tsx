@@ -9,11 +9,11 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@reactive-resume/u
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@reactive-resume/ui/components/tabs";
 import { toast } from "@reactive-resume/ui/components/toast";
 import { useBreakpoint } from "@reactive-resume/ui/hooks/use-breakpoint";
-import { downloadWithAnchor } from "@reactive-resume/utils/file";
 import { cn } from "@reactive-resume/utils/style";
 import { createLetterFile, letterFileName } from "@/features/letters/export";
 import { useLetterEditorStore } from "@/features/letters/store";
 import { useEditorStore } from "@/features/resume/editor/store";
+import { downloadFile } from "@/features/resume/export/save-file";
 import { createExportFile, getDefaultFileName, sanitizeFileName } from "@/features/resume/export/use-resume-export";
 import {
 	DownloadActions,
@@ -134,13 +134,19 @@ function LetterDownloadTab() {
 		try {
 			if (bothId) {
 				const resume = await client.resume.getById({ id: bothId });
-				downloadWithAnchor(await createExportFile(resume, "pdf"), `${getDefaultFileName(resume)}.pdf`);
+				await downloadFile({
+					blob: await createExportFile(resume, "pdf"),
+					suggestedName: `${getDefaultFileName(resume)}.pdf`,
+				});
 				// Two downloads in a row are more reliable a moment apart.
 				await new Promise((resolve) => window.setTimeout(resolve, PAUSE_BETWEEN_FILES_MS));
-				downloadWithAnchor(await createLetterFile(letter, "pdf"), `${letterFileName(letter)}.pdf`);
+				await downloadFile({
+					blob: await createLetterFile(letter, "pdf"),
+					suggestedName: `${letterFileName(letter)}.pdf`,
+				});
 				toast.add({ description: t`Downloaded your resume and this letter` });
 			} else if (as !== "both") {
-				downloadWithAnchor(await createLetterFile(letter, as), file);
+				await downloadFile({ blob: await createLetterFile(letter, as), suggestedName: file });
 				toast.add({ description: t`Downloaded ${file}` });
 			}
 			setState("done");
