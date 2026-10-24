@@ -10,13 +10,13 @@ export function BrandIcon({ variant = "logo", className, ...props }: Props) {
 			<img
 				src={`/${variant}/dark.svg`}
 				alt="Fulei Resume"
-				className={cn("hidden size-12 dark:block", className)}
+				className={cn("hidden size-12 object-contain dark:block", className)}
 				{...props}
 			/>
 			<img
 				src={`/${variant}/light.svg`}
 				alt="Fulei Resume"
-				className={cn("block size-12 dark:hidden", className)}
+				className={cn("block size-12 object-contain dark:hidden", className)}
 				{...props}
 			/>
 		</>
