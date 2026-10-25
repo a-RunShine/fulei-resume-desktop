@@ -1,13 +1,8 @@
 import { Buffer } from "node:buffer";
 import fs from "node:fs";
-import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-
-// sharp is not a direct dependency of apps/desktop, so resolve the copy the
-// server already ships rather than adding a second native build.
-const require = createRequire(path.join(import.meta.dirname, "../../server/package.json"));
-const sharp = require("sharp");
+import sharp from "sharp";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const sourceDir = path.join(repoRoot, "apps", "desktop", "icons-src");

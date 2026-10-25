@@ -32,6 +32,7 @@
 		"@typescript/native-preview": "catalog:",
 		"@vitejs/plugin-react": "^6.1.2",
 		"pdfjs-dist": "6.4.299",
+		"sharp": "^0.35.5",
 		"typescript": "catalog:",
 		"vite": "^8.3.4",
 		"vitest": "catalog:"
