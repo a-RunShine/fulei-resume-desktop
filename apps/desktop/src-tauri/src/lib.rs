@@ -7,6 +7,7 @@ use startup::{
     BootOutcome, BrowserHost, Clock, DesktopBoot, ProcessHost, ServerLaunch, StartupSurface,
 };
 
+mod assistant_data;
 mod local_api;
 mod startup;
 
@@ -251,15 +252,18 @@ fn read_prepared_font(
 const CREDENTIAL_SERVICE: &str = "dev.reactivresume.desktop";
 const CREDENTIAL_USER: &str = "assistant";
 
-fn data_directory() -> std::path::PathBuf {
-    match std::env::var("REACTIVE_RESUME_DATA_DIR") {
-        Ok(directory) => std::path::PathBuf::from(directory),
-        Err(_) => std::env::temp_dir().join("reactive-resume-data"),
-    }
+/// Where the assistant's own files live, and the move of any left behind in the
+/// temp directory older builds used.
+fn assistant_data_directory() -> Result<std::path::PathBuf, String> {
+    let app_data = desktop_app_data()?;
+    let destination = assistant_data::data_directory(&app_data);
+    assistant_data::adopt_legacy_data(&assistant_data::legacy_data_directory(), &destination)
+        .map_err(|error| error.to_string())?;
+    Ok(destination)
 }
 
 fn write_text(file_name: &str, contents: &str) -> Result<(), String> {
-    let directory = data_directory();
+    let directory = assistant_data_directory()?;
     std::fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
     std::fs::write(directory.join(file_name), contents).map_err(|error| error.to_string())
 }
@@ -297,8 +301,9 @@ fn stored_api_key() -> Result<String, String> {
 }
 
 fn read_provider() -> Result<ProviderSettings, String> {
+    let directory = assistant_data_directory()?;
     let bytes =
-        std::fs::read(data_directory().join("provider.json")).map_err(|error| error.to_string())?;
+        std::fs::read(directory.join("provider.json")).map_err(|error| error.to_string())?;
     serde_json::from_slice(&bytes).map_err(|error| error.to_string())
 }
 
