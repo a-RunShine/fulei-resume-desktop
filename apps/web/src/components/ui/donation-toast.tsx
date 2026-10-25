@@ -7,6 +7,7 @@ import { useTimeout } from "usehooks-ts";
 import { Button } from "@reactive-resume/ui/components/button";
 import { Icon } from "@reactive-resume/ui/components/icon";
 import { cn } from "@reactive-resume/utils/style";
+import { detectionRuntime } from "@/libs/desktop-runtime";
 import { D3, EASE, EXIT } from "@/libs/motion";
 
 const DONATE_URL = "https://opencollective.com/reactive-resume/donate";
@@ -18,8 +19,12 @@ export function DonationToast() {
 	const pathname = useRouterState({ select: (state) => state.location.pathname });
 	const [open, setOpen] = useState(false);
 
+	// The desktop build is a personal tool: the card covers the corner of the
+	// content and asks the same person for money. Only the web asks.
+	const asking = detectionRuntime(globalThis) === "browser";
+
 	// Never closes by itself: "Maybe later", or donating, is what records the 1-week cookie.
-	useTimeout(() => setOpen(true), Cookies.get(DISMISSED_COOKIE_NAME) === "true" ? null : SHOW_DELAY_MS);
+	useTimeout(() => setOpen(true), !asking || Cookies.get(DISMISSED_COOKIE_NAME) === "true" ? null : SHOW_DELAY_MS);
 
 	const dismiss = () => {
 		setOpen(false);
