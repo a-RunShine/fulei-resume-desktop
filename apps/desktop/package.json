@@ -8,11 +8,11 @@
 		"build": "vite build",
 		"tauri": "tauri",
 		"typecheck": "tsgo --noEmit",
-		"test": "vitest run --passWithNoTests --exclude src/export-window.test.ts --exclude src/provider-window.test.ts",
-		"test:coverage": "vitest run --coverage --passWithNoTests --exclude src/export-window.test.ts --exclude src/provider-window.test.ts",
-		"test:ci": "vitest run --passWithNoTests --exclude src/export-window.test.ts --exclude src/provider-window.test.ts",
-		"test:agent": "vitest run --passWithNoTests --exclude src/export-window.test.ts --exclude src/provider-window.test.ts",
-		"test:window": "vitest run src/export-window.test.ts src/provider-window.test.ts"
+		"test": "vitest run --passWithNoTests --exclude src/export-window.test.ts --exclude src/provider-window.test.ts --exclude src/window-regression.test.ts",
+		"test:coverage": "vitest run --coverage --passWithNoTests --exclude src/export-window.test.ts --exclude src/provider-window.test.ts --exclude src/window-regression.test.ts",
+		"test:ci": "vitest run --passWithNoTests --exclude src/export-window.test.ts --exclude src/provider-window.test.ts --exclude src/window-regression.test.ts",
+		"test:agent": "vitest run --passWithNoTests --exclude src/export-window.test.ts --exclude src/provider-window.test.ts --exclude src/window-regression.test.ts",
+		"test:window": "vitest run --no-file-parallelism src/export-window.test.ts src/provider-window.test.ts src/window-regression.test.ts"
 	},
 	"dependencies": {
 		"@reactive-resume/pdf": "workspace:*",
