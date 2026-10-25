@@ -252,14 +252,9 @@ fn read_prepared_font(
 const CREDENTIAL_SERVICE: &str = "dev.reactivresume.desktop";
 const CREDENTIAL_USER: &str = "assistant";
 
-/// Where the assistant's own files live, and the move of any left behind in the
-/// temp directory older builds used.
 fn assistant_data_directory() -> Result<std::path::PathBuf, String> {
     let app_data = desktop_app_data()?;
-    let destination = assistant_data::data_directory(&app_data);
-    assistant_data::adopt_legacy_data(&assistant_data::legacy_data_directory(), &destination)
-        .map_err(|error| error.to_string())?;
-    Ok(destination)
+    assistant_data::resolve(&app_data).map_err(|error| error.to_string())
 }
 
 fn write_text(file_name: &str, contents: &str) -> Result<(), String> {

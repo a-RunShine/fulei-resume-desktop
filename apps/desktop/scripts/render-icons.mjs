@@ -8,7 +8,6 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
 const sourceDir = path.join(repoRoot, "apps", "desktop", "icons-src");
 const targetDir = path.join(repoRoot, "apps", "desktop", "src-tauri", "icons");
 
-// 48px and up carry the full wordmark; below that "Resume" would be a smear.
 const FULL_MARK_MIN = 48;
 
 const SIZES = [16, 24, 32, 48, 64, 128, 256, 512];

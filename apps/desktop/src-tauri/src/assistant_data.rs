@@ -1,25 +1,34 @@
 use std::path::{Path, PathBuf};
 
-/// Where the assistant keeps its own files (the provider settings and the
-/// resume text it sends along). These belong with the rest of the app's data,
-/// not in the temp directory the system is free to clear.
-pub(crate) fn data_directory(app_data: &Path) -> PathBuf {
-    match std::env::var("REACTIVE_RESUME_DATA_DIR") {
-        Ok(directory) if !directory.trim().is_empty() => PathBuf::from(directory),
+pub(crate) const DATA_DIR_OVERRIDE: &str = "REACTIVE_RESUME_DATA_DIR";
+
+pub(crate) fn data_directory(app_data: &Path, override_dir: Option<&str>) -> PathBuf {
+    match override_dir {
+        Some(directory) if !directory.trim().is_empty() => PathBuf::from(directory),
         _ => app_data.join("data").join("assistant"),
     }
 }
 
-/// The directory older builds wrote to. Its contents are moved into the new
-/// home the first time the app looks for them, so an upgrade keeps the
-/// provider the user had already configured.
 pub(crate) fn legacy_data_directory() -> PathBuf {
     std::env::temp_dir().join("reactive-resume-data")
 }
 
-/// Move anything the old location still holds into the new one. A file already
-/// present at the destination wins, since it is the newer write.
-pub(crate) fn adopt_legacy_data(legacy: &Path, destination: &Path) -> std::io::Result<()> {
+pub(crate) fn resolve(app_data: &Path) -> std::io::Result<PathBuf> {
+    resolve_with(app_data, std::env::var(DATA_DIR_OVERRIDE).ok().as_deref())
+}
+
+pub(crate) fn resolve_with(app_data: &Path, override_dir: Option<&str>) -> std::io::Result<PathBuf> {
+    let destination = data_directory(app_data, override_dir);
+    let isolated = override_dir.is_some_and(|value| !value.trim().is_empty());
+
+    if !isolated {
+        adopt(&legacy_data_directory(), &destination)?;
+    }
+
+    Ok(destination)
+}
+
+pub(crate) fn adopt(legacy: &Path, destination: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(destination)?;
 
     let entries = match std::fs::read_dir(legacy) {
@@ -28,7 +37,6 @@ pub(crate) fn adopt_legacy_data(legacy: &Path, destination: &Path) -> std::io::R
     };
 
     for entry in entries.flatten() {
-        let source = entry.path();
         if !entry.file_type().map(|kind| kind.is_file()).unwrap_or(false) {
             continue;
         }
@@ -36,6 +44,7 @@ pub(crate) fn adopt_legacy_data(legacy: &Path, destination: &Path) -> std::io::R
         if target.exists() {
             continue;
         }
+        let source = entry.path();
         std::fs::rename(&source, &target).or_else(|_| {
             std::fs::copy(&source, &target)?;
             std::fs::remove_file(&source)
@@ -91,34 +100,30 @@ mod tests {
     fn the_assistant_keeps_its_files_under_the_app_data_directory() {
         let fixture = Fixture::new();
         let app_data = fixture.path("app");
-        std::env::remove_var("REACTIVE_RESUME_DATA_DIR");
 
-        let resolved = data_directory(&app_data);
-
-        assert_eq!(resolved, app_data.join("data").join("assistant"));
+        assert_eq!(
+            data_directory(&app_data, None),
+            app_data.join("data").join("assistant")
+        );
     }
 
     #[test]
-    fn the_override_still_wins_so_tests_can_isolate_themselves() {
+    fn the_override_replaces_the_app_data_directory() {
         let fixture = Fixture::new();
         let elsewhere = fixture.path("elsewhere");
-        std::env::set_var("REACTIVE_RESUME_DATA_DIR", &elsewhere);
 
-        let resolved = data_directory(&fixture.path("app"));
-
-        std::env::remove_var("REACTIVE_RESUME_DATA_DIR");
-        assert_eq!(resolved, elsewhere);
+        assert_eq!(
+            data_directory(&fixture.path("app"), Some(&elsewhere.to_string_lossy())),
+            elsewhere
+        );
     }
 
     #[test]
-    fn an_empty_override_is_ignored() {
+    fn an_empty_override_falls_back_to_the_app_data_directory() {
         let fixture = Fixture::new();
-        std::env::set_var("REACTIVE_RESUME_DATA_DIR", "   ");
+        let app_data = fixture.path("app");
 
-        let resolved = data_directory(&fixture.path("app"));
-
-        std::env::remove_var("REACTIVE_RESUME_DATA_DIR");
-        assert_eq!(resolved, fixture.path("app").join("data").join("assistant"));
+        assert_eq!(data_directory(&app_data, Some("   ")), app_data.join("data").join("assistant"));
     }
 
     #[test]
@@ -128,7 +133,7 @@ mod tests {
         let destination = fixture.path("app/data/assistant");
         write(&legacy.join("provider.json"), "{\"baseUrl\":\"https://x\",\"model\":\"m\"}");
 
-        adopt_legacy_data(&legacy, &destination).expect("adopt");
+        adopt(&legacy, &destination).expect("adopt");
 
         assert_eq!(
             std::fs::read_to_string(destination.join("provider.json")).expect("moved"),
@@ -145,7 +150,7 @@ mod tests {
         write(&legacy.join("provider.json"), "old");
         write(&destination.join("provider.json"), "new");
 
-        adopt_legacy_data(&legacy, &destination).expect("adopt");
+        adopt(&legacy, &destination).expect("adopt");
 
         assert_eq!(
             std::fs::read_to_string(destination.join("provider.json")).expect("kept"),
@@ -154,11 +159,11 @@ mod tests {
     }
 
     #[test]
-    fn a_missing_old_location_is_a_no_op() {
+    fn a_missing_old_location_still_creates_the_destination() {
         let fixture = Fixture::new();
         let destination = fixture.path("app/data/assistant");
 
-        adopt_legacy_data(&fixture.path("nothing-here"), &destination).expect("no-op");
+        adopt(&fixture.path("nothing-here"), &destination).expect("no-op");
 
         assert!(destination.is_dir());
     }
@@ -171,9 +176,25 @@ mod tests {
         std::fs::create_dir_all(legacy.join("nested")).expect("nested");
         write(&legacy.join("provider.json"), "kept");
 
-        adopt_legacy_data(&legacy, &destination).expect("adopt");
+        adopt(&legacy, &destination).expect("adopt");
 
         assert!(legacy.join("nested").is_dir());
         assert!(destination.join("provider.json").is_file());
+    }
+
+    #[test]
+    fn an_isolated_run_never_touches_the_real_temp_directory() {
+        let fixture = Fixture::new();
+        let real_legacy = legacy_data_directory();
+        let probe = real_legacy.join("provider.json");
+        let existed = probe.exists();
+        let before = std::fs::read(&probe).ok();
+
+        let override_dir = fixture.path("isolated");
+        let resolved = resolve_with(&fixture.path("app"), Some(&override_dir.to_string_lossy())).expect("resolve");
+
+        assert_eq!(resolved, override_dir);
+        assert_eq!(probe.exists(), existed);
+        assert_eq!(std::fs::read(&probe).ok(), before);
     }
 }

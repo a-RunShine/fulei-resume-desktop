@@ -33,6 +33,13 @@ const createResume = async (page: Page, withSampleData: boolean) => {
 	return (await created.json()) as string;
 };
 
+const reportRuntimeBesideExecutable = () => {
+	const executableDirectory = dirname(desktopExecutable);
+	const leftover = ["node", "server", "web"].filter((name) => existsSync(join(executableDirectory, name)));
+	if (leftover.length === 0) return;
+	console.warn(`[window] a runtime already sat beside the executable (${leftover.join(", ")}); the app ignored it`);
+};
+
 const prepareResume = async (page: Page, resumeId: string) => {
 	const response = await page.request.get(`http://127.0.0.1:${desktopPort}/api/openapi/resumes/${resumeId}`);
 	expect(response.status()).toBe(200);
@@ -95,21 +102,11 @@ it("opens the app from the staged runtime rather than whatever sits beside the e
 
 	try {
 		expect(existsSync(desktopExecutable)).toBe(true);
-
-		// The window must have reached the Documents page, which only happens if
-		// it booted the server out of the staged runtime. That is the behaviour
-		// worth asserting; whether `tauri dev` also copied a runtime beside the
-		// debug executable is an artefact of a previous package build, so it is
-		// reported for diagnosis but not asserted.
 		expect(new URL(session.page.url()).pathname).not.toBe("/desktop/enter");
 		await expectPage(session.page.getByRole("heading", { name: "Documents" })).toBeVisible({ timeout: 180_000 });
 		expect(existsSync(join(desktopDataDirectory(directory), "pglite"))).toBe(true);
 
-		const beside = dirname(desktopExecutable);
-		const leftover = ["node", "server", "web"].filter((name) => existsSync(join(beside, name)));
-		if (leftover.length > 0) {
-			console.warn(`[window] a runtime already sat beside the executable (${leftover.join(", ")}); the app ignored it`);
-		}
+		reportRuntimeBesideExecutable();
 	} finally {
 		await session.close();
 	}
