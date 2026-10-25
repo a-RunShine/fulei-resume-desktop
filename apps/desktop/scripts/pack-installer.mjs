@@ -241,6 +241,12 @@ export function verifyRuntimeLayout(destination) {
 	];
 	const missing = required.filter((candidate) => !fs.existsSync(candidate));
 	if (missing.length > 0) throw new Error(`installer runtime is missing: ${missing.join(", ")}`);
+
+	// A file that exists but is empty passes a presence check and then fails at
+	// runtime with a 180-second timeout, and the stage is stamped valid so every
+	// later run reuses it. Refuse it here instead.
+	const empty = required.filter((candidate) => fs.statSync(candidate).size === 0);
+	if (empty.length > 0) throw new Error(`installer runtime is empty: ${empty.join(", ")}`);
 }
 
 export function stageRuntime({ runtimeDir: destination, nodeSource, distDir, bundleDir, modulesDir, migrationsDir }) {

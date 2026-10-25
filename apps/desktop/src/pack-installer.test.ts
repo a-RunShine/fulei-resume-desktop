@@ -206,6 +206,44 @@ it("checks the runtime layout the startup side requires", () => {
 	fs.rmSync(fixture.root, { recursive: true, force: true });
 });
 
+it("refuses a runtime whose entry files exist but are empty", () => {
+	const fixture = createFixture();
+	stageFixture(fixture);
+
+	fs.writeFileSync(path.join(fixture.runtime, "web", "dist", "index.html"), "");
+	expect(() => verifyRuntimeLayout(fixture.runtime)).toThrow(/empty: .*index\.html/);
+
+	stageFixture(fixture);
+	fs.writeFileSync(path.join(fixture.runtime, "server", "desktop-host.mjs"), "");
+	expect(() => verifyRuntimeLayout(fixture.runtime)).toThrow(/empty: .*desktop-host\.mjs/);
+
+	stageFixture(fixture);
+	fs.writeFileSync(path.join(fixture.runtime, "server", "forme_bg.wasm"), "");
+	expect(() => verifyRuntimeLayout(fixture.runtime)).toThrow(/empty: .*forme_bg\.wasm/);
+
+	fs.rmSync(fixture.root, { recursive: true, force: true });
+});
+
+it("names every empty entry in one message so a broken stage is diagnosable", () => {
+	const fixture = createFixture();
+	stageFixture(fixture);
+
+	fs.writeFileSync(path.join(fixture.runtime, "server", "desktop-host.mjs"), "");
+	fs.writeFileSync(path.join(fixture.runtime, "web", "dist", "index.html"), "");
+
+	let message = "";
+	try {
+		verifyRuntimeLayout(fixture.runtime);
+	} catch (error) {
+		message = (error as Error).message;
+	}
+
+	expect(message).toContain("desktop-host.mjs");
+	expect(message).toContain("index.html");
+
+	fs.rmSync(fixture.root, { recursive: true, force: true });
+});
+
 it("copies the PDF engine beside the server entry so the server can render", () => {
 	const fixture = createFixture();
 	stageFixture(fixture);
