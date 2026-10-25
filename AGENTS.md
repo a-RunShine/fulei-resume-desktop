@@ -17,7 +17,7 @@ This block is written and re-added by `turbo` before repository-scoped commands 
 
 ### Issue tracker
 
-GitHub Issues for `a-RunShine/reactive-resume`. See `docs/agents/issue-tracker.md`.
+GitHub Issues for `a-RunShine/fulei-resume-desktop`. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
