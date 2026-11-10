@@ -44,20 +44,20 @@ describe("route titles", () => {
 		expect(titleOf(atsCheckerRoute)).toBe("Free ATS resume checker — Reactive Resume");
 	});
 
-	it("titles a shared resume with the person's name and the product name", () => {
+	it("keeps the product name on the shared resume's success branch", () => {
 		expect(titleOf(publicResumeRoute, { resume: sharedResume })).toBe("Dana Reyes - Fulei Resume");
 	});
 
-	it("falls back to the product name while a shared resume is not loaded", () => {
-		expect(titleOf(publicResumeRoute)).toBe("Fulei Resume - Fulei Resume");
+	it("keeps the upstream name on the shared resume's not-loaded branch", () => {
+		expect(titleOf(publicResumeRoute)).toBe("Reactive Resume - Reactive Resume");
 	});
 
-	it("titles the root resume's unavailable state with the product name", () => {
-		expect(titleOf(homeRoute, { root: { status: "unavailable" } })).toBe("Fulei Resume");
+	it("keeps the upstream name on the root resume's unavailable state", () => {
+		expect(titleOf(homeRoute, { root: { status: "unavailable" } })).toBe("Reactive Resume");
 	});
 
-	it("titles a public root resume with the person's name and the product name", () => {
+	it("keeps the upstream name on a public root resume", () => {
 		const loaderData = { root: { status: "public", username: "dana", slug: "dana-reyes", resume: sharedResume } };
-		expect(titleOf(homeRoute, loaderData)).toBe("Dana Reyes - Fulei Resume");
+		expect(titleOf(homeRoute, loaderData)).toBe("Dana Reyes - Reactive Resume");
 	});
 });
