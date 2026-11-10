@@ -46,8 +46,8 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 	// index.html carries the tags that never change (charset, viewport, icons, manifest); the server adds each page's
 	// canonical link, social cards and structured data. The router only keeps the title and description current.
 	head: () => {
-		const { title, description } = getHomepageMeta();
-		return { meta: [{ title }, { name: "description", content: description }] };
+		const { description } = getHomepageMeta();
+		return { meta: [{ title: "Fulei Resume" }, { name: "description", content: description }] };
 	},
 	beforeLoad: ({ context }) => loadRootContext(context.queryClient),
 });

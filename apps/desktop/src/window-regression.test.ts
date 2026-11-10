@@ -6,6 +6,7 @@ import {
 	desktopPort,
 	killLeftoverWindows,
 	openDesktopWindow,
+	readDesktopWindowTitles,
 	stopWindow,
 	windowDirectory,
 } from "./window-runtime";
@@ -250,6 +251,23 @@ it("keeps working with every other host blocked", async () => {
 		);
 
 		expect(blocked.length).toBeGreaterThan(0);
+	} finally {
+		await closeSurface(surface);
+	}
+}, 900_000);
+
+it("keeps the product name in the real window title and the document title", async () => {
+	const surface = await openSurface("window-title", 9347);
+	const page = surface.page;
+
+	try {
+		await expect.poll(() => readDesktopWindowTitles(), { timeout: 120_000, interval: 2_000 }).toContain("Fulei Resume");
+		await expectPage(page).toHaveTitle("Fulei Resume");
+
+		const id = await createViaApi(page, true, "标题回归");
+		await openBuilder(page, id);
+		await expect.poll(() => readDesktopWindowTitles(), { timeout: 120_000, interval: 2_000 }).toContain("Fulei Resume");
+		await expectPage(page).toHaveTitle("标题回归 - Fulei Resume");
 	} finally {
 		await closeSurface(surface);
 	}
