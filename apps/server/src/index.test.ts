@@ -1,5 +1,5 @@
 import { once } from "node:events";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -19,6 +19,7 @@ const serverEnv = vi.hoisted(() => ({
 }));
 const doubles = vi.hoisted(() => ({
 	detailed: false,
+	migrated: vi.fn(async () => false),
 	migrate: vi.fn(async () => {
 		events.push("migrations");
 	}),
@@ -45,6 +46,9 @@ vi.mock("drizzle-orm/node-postgres/migrator", () => ({
 }));
 vi.mock("./startup/schema-check", () => ({
 	verifyMigratedSchema: () => doubles.verify(),
+}));
+vi.mock("./startup/migration-state", () => ({
+	isDatabaseMigrated: () => doubles.migrated(),
 }));
 vi.mock("@reactive-resume/api/features/agent/runs", () => ({
 	reapStaleAgentRunsAtBoot: () => doubles.reap(),
@@ -88,6 +92,8 @@ vi.mock("@reactive-resume/env/server", () => ({ env: serverEnv }));
 vi.mock("./startup/career-scheduler", () => ({ startCareerScheduler: () => career.start() }));
 afterEach(() => {
 	doubles.detailed = false;
+	doubles.migrated.mockReset();
+	doubles.migrated.mockImplementation(async () => false);
 	doubles.migrate.mockReset();
 	doubles.migrate.mockImplementation(async () => {
 		events.push("migrations");
@@ -162,50 +168,37 @@ describe("server startup", () => {
 		}
 	});
 
-	it("writes the desktop migration identity after migrations and schema verification succeed", async () => {
+	it("runs migrations and schema verification before listening when the database is not migrated", async () => {
 		doubles.detailed = true;
+		doubles.migrated.mockImplementation(async () => false);
 		process.env.DESKTOP = "1";
-		const dataDirectory = await mkdtemp(path.join(tmpdir(), "rr-desktop-"));
-		process.env.DESKTOP_DATA_DIR = dataDirectory;
 		vi.spyOn(process, "on").mockReturnValue(process);
 		vi.spyOn(process, "once").mockReturnValue(process);
 		vi.spyOn(console, "info").mockImplementation(() => {});
 		vi.spyOn(console, "error").mockImplementation(() => {});
 		events.length = 0;
-		try {
-			await (await import("./index")).main();
-			expect(events.indexOf("migrations")).toBeGreaterThanOrEqual(0);
-			expect(events.indexOf("schema verification")).toBeGreaterThan(events.indexOf("migrations"));
-			expect(await readFile(path.join(dataDirectory, "migration-identity"), "utf8")).not.toBe("");
-		} finally {
-			await rm(dataDirectory, { recursive: true, force: true });
-		}
+		await (await import("./index")).main();
+		expect(events.indexOf("migrations")).toBeGreaterThanOrEqual(0);
+		expect(events.indexOf("schema verification")).toBeGreaterThan(events.indexOf("migrations"));
 	});
 
-	it("skips desktop migrations and schema verification when the migration identity matches", async () => {
+	it("skips migrations and schema verification when the database is already migrated", async () => {
 		doubles.detailed = true;
+		doubles.migrated.mockImplementation(async () => true);
 		process.env.DESKTOP = "1";
-		const dataDirectory = await mkdtemp(path.join(tmpdir(), "rr-desktop-"));
-		process.env.DESKTOP_DATA_DIR = dataDirectory;
 		vi.spyOn(process, "on").mockReturnValue(process);
 		vi.spyOn(process, "once").mockReturnValue(process);
 		vi.spyOn(console, "info").mockImplementation(() => {});
 		vi.spyOn(console, "error").mockImplementation(() => {});
 		events.length = 0;
-		try {
-			const entry = await import("./index");
-			await entry.main();
-			const marker = await readFile(path.join(dataDirectory, "migration-identity"), "utf8");
-			events.length = 0;
-			await entry.main();
-			expect(events).not.toContain("migrations");
-			expect(events).not.toContain("schema verification");
-			expect(events).toContain("auth ready");
-			expect(events).toContain("server listening");
-			expect(await readFile(path.join(dataDirectory, "migration-identity"), "utf8")).toBe(marker);
-		} finally {
-			await rm(dataDirectory, { recursive: true, force: true });
-		}
+		const entry = await import("./index");
+		await entry.main();
+		events.length = 0;
+		await entry.main();
+		expect(events).not.toContain("migrations");
+		expect(events).not.toContain("schema verification");
+		expect(events).toContain("auth ready");
+		expect(events).toContain("server listening");
 	});
 
 	it("reaps stale agent runs after the desktop server is listening without waiting to start the career scheduler", async () => {
@@ -289,35 +282,7 @@ describe("server startup", () => {
 		}
 	});
 
-	it("runs desktop migrations when the identity does not match and then records the shipped identity", async () => {
-		doubles.detailed = true;
-		process.env.DESKTOP = "1";
-		const dataDirectory = await mkdtemp(path.join(tmpdir(), "rr-desktop-"));
-		const markerPath = path.join(dataDirectory, "migration-identity");
-		process.env.DESKTOP_DATA_DIR = dataDirectory;
-		await writeFile(markerPath, "stale-identity");
-		vi.spyOn(process, "on").mockReturnValue(process);
-		vi.spyOn(process, "once").mockReturnValue(process);
-		vi.spyOn(console, "info").mockImplementation(() => {});
-		vi.spyOn(console, "error").mockImplementation(() => {});
-		events.length = 0;
-		try {
-			const entry = await import("./index");
-			await entry.main();
-			expect(events.indexOf("schema verification")).toBeGreaterThan(events.indexOf("migrations"));
-			const marker = await readFile(markerPath, "utf8");
-			expect(marker).not.toBe("stale-identity");
-			events.length = 0;
-			await entry.main();
-			expect(events).not.toContain("migrations");
-			expect(events).not.toContain("schema verification");
-			expect(await readFile(markerPath, "utf8")).toBe(marker);
-		} finally {
-			await rm(dataDirectory, { recursive: true, force: true });
-		}
-	});
-
-	it("does not record a desktop migration identity when schema verification finds drift", async () => {
+	it("keeps listening when schema verification finds drift without STRICT_SCHEMA_CHECK", async () => {
 		doubles.detailed = true;
 		process.env.DESKTOP = "1";
 		serverEnv.STRICT_SCHEMA_CHECK = false;
@@ -325,48 +290,34 @@ describe("server startup", () => {
 			events.push("schema verification");
 			throw new Error('table "resume" missing');
 		});
-		const dataDirectory = await mkdtemp(path.join(tmpdir(), "rr-desktop-"));
-		const markerPath = path.join(dataDirectory, "migration-identity");
-		process.env.DESKTOP_DATA_DIR = dataDirectory;
-		await writeFile(markerPath, "stale-identity");
 		vi.spyOn(process, "on").mockReturnValue(process);
 		vi.spyOn(process, "once").mockReturnValue(process);
 		vi.spyOn(console, "info").mockImplementation(() => {});
-		vi.spyOn(console, "error").mockImplementation(() => {});
+		const logged = vi.spyOn(console, "error").mockImplementation(() => {});
 		events.length = 0;
-		try {
-			await (await import("./index")).main();
-			expect(events).toContain("migrations");
-			expect(events).toContain("schema verification");
-			expect(events).toContain("server listening");
-			expect(await readFile(markerPath, "utf8")).toBe("stale-identity");
-		} finally {
-			await rm(dataDirectory, { recursive: true, force: true });
-		}
+		await (await import("./index")).main();
+		expect(events).toContain("migrations");
+		expect(events).toContain("schema verification");
+		expect(events).toContain("server listening");
+		expect(logged).toHaveBeenCalledWith(
+			"Database schema verification failed",
+			expect.objectContaining({ error: expect.any(Error) }),
+		);
 	});
 
-	it("migrates, verifies, and reaps before listening without touching a desktop migration identity", async () => {
+	it("migrates, verifies, and reaps before listening", async () => {
 		doubles.detailed = true;
 		delete process.env.DESKTOP;
-		const dataDirectory = await mkdtemp(path.join(tmpdir(), "rr-desktop-"));
-		const markerPath = path.join(dataDirectory, "migration-identity");
-		process.env.DESKTOP_DATA_DIR = dataDirectory;
-		await writeFile(markerPath, "leave-me");
 		vi.spyOn(process, "on").mockReturnValue(process);
 		vi.spyOn(process, "once").mockReturnValue(process);
 		vi.spyOn(console, "info").mockImplementation(() => {});
 		vi.spyOn(console, "error").mockImplementation(() => {});
 		events.length = 0;
-		try {
-			await (await import("./index")).main();
-			expect(events.indexOf("migrations")).toBeGreaterThanOrEqual(0);
-			expect(events.indexOf("schema verification")).toBeGreaterThan(events.indexOf("migrations"));
-			expect(events.indexOf("reap")).toBeGreaterThan(events.indexOf("schema verification"));
-			expect(events.indexOf("auth ready")).toBeGreaterThan(events.indexOf("reap"));
-			expect(events.indexOf("server listening")).toBeGreaterThan(events.indexOf("auth ready"));
-			expect(await readFile(markerPath, "utf8")).toBe("leave-me");
-		} finally {
-			await rm(dataDirectory, { recursive: true, force: true });
-		}
+		await (await import("./index")).main();
+		expect(events.indexOf("migrations")).toBeGreaterThanOrEqual(0);
+		expect(events.indexOf("schema verification")).toBeGreaterThan(events.indexOf("migrations"));
+		expect(events.indexOf("reap")).toBeGreaterThan(events.indexOf("schema verification"));
+		expect(events.indexOf("auth ready")).toBeGreaterThan(events.indexOf("reap"));
+		expect(events.indexOf("server listening")).toBeGreaterThan(events.indexOf("auth ready"));
 	});
 });
