@@ -14,8 +14,10 @@ import {
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { onTestFinished } from "vitest";
 import { chromium } from "@playwright/test";
 import { stageRuntime, verifyRuntimeLayout } from "../scripts/pack-installer.mjs";
+import { createRunDirectory, finishRunDirectories, runDirectoryName, sweepRunDirectories } from "./run-directories";
 
 const desktopRoot = fileURLToPath(new URL("..", import.meta.url));
 const repoRoot = fileURLToPath(new URL("../../..", import.meta.url));
@@ -101,6 +103,7 @@ const prepareDeploy = async (timing: RuntimeTiming) => {
 const stage = async () => {
 	const timing: RuntimeTiming = { webBuildMs: 0, serverBuildMs: 0, deployMs: 0, stageMs: 0, reused: false };
 	mkdirSync(runRoot, { recursive: true });
+	await sweepRunDirectories(runRoot);
 	await prepareBuilds(timing);
 	await prepareDeploy(timing);
 
@@ -351,9 +354,10 @@ export const seedPreparedFontCache = async (directory: string) => {
 };
 
 export const windowDirectory = (name: string) => {
-	const directory = join(runRoot, "runs", `${name}-${process.pid}`);
-	rmSync(directory, { recursive: true, force: true });
-	mkdirSync(directory, { recursive: true });
+	const directory = createRunDirectory(join(runRoot, "runs"), runDirectoryName(name, process.pid));
+	onTestFinished(async (context) => {
+		await finishRunDirectories(context.task.result?.state === "pass" ? "pass" : "fail");
+	}, 120_000);
 	return directory;
 };
 
