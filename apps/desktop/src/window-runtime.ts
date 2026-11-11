@@ -12,7 +12,7 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
 import { stageRuntime, verifyRuntimeLayout } from "../scripts/pack-installer.mjs";
@@ -362,6 +362,27 @@ export const filesUnder = (directory: string) => {
 	return readdirSync(directory, { encoding: "utf8", recursive: true })
 		.map((entry) => join(directory, entry))
 		.filter((path) => statSync(path).isFile());
+};
+
+export const readDesktopWindowTitles = () => {
+	const pid = windowProcess?.pid;
+	if (!pid) return [];
+	const processName = basename(desktopExecutable, ".exe");
+	try {
+		const script = [
+			"[Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
+			`$ids = @(${pid})`,
+			'for ($i = 0; $i -lt $ids.Count -and $i -lt 400; $i++) { $ids += Get-CimInstance Win32_Process -Filter "ParentProcessId=$($ids[$i])" | Select-Object -ExpandProperty ProcessId }',
+			`Get-Process -Id $ids -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq "${processName}" } | Select-Object -ExpandProperty MainWindowTitle`,
+		].join("; ");
+		const output = execFileSync("powershell.exe", ["-NoProfile", "-Command", script], { encoding: "utf8" });
+		return output
+			.split(/\r?\n/)
+			.map((line) => line.trim())
+			.filter((line) => line.length > 0);
+	} catch {
+		return [];
+	}
 };
 
 export const killLeftoverWindows = () => {

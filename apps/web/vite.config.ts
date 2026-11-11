@@ -150,6 +150,7 @@ export default defineConfig({
 			semicolons: true,
 			quoteStyle: "double",
 			autoCodeSplitting: true,
+			routeFileIgnorePattern: "\\.test\\.(?:ts|tsx)$",
 		}),
 		viteReact(),
 		linguiPlugin(),
