@@ -4,7 +4,7 @@ import { createFileRoute, redirect, useBlocker } from "@tanstack/react-router";
 import { useEffect } from "react";
 import z from "zod";
 import { toast } from "@reactive-resume/ui/components/toast";
-import { DESKTOP_PRODUCT_NAME } from "@reactive-resume/utils/product";
+import { APP_PRODUCT_NAME } from "@reactive-resume/utils/product";
 import { LetterShell } from "./-components/letter-shell";
 import { letterWordsQueryOptions } from "@/features/letters/compose";
 import { useLetterEditorStore } from "@/features/letters/store";
@@ -40,7 +40,7 @@ export const Route = createFileRoute("/builder/letter/$coverLetterId")({
 	},
 	head: ({ loaderData }) => ({
 		meta: loaderData
-			? [{ title: `${loaderData.name} - ${DESKTOP_PRODUCT_NAME}` }, createNoindexFollowMeta()]
+			? [{ title: `${loaderData.name} - ${APP_PRODUCT_NAME}` }, createNoindexFollowMeta()]
 			: [createNoindexFollowMeta()],
 	}),
 });

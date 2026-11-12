@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { render } from "react-email";
-import { DESKTOP_PRODUCT_NAME, UPSTREAM_PRODUCT_NAME } from "@reactive-resume/utils/product";
+import { APP_PRODUCT_NAME, UPSTREAM_PRODUCT_NAME } from "@reactive-resume/utils/product";
 import { ResetPasswordEmail, VerifyEmail, VerifyEmailChange } from "./auth";
 
 const emails = () => [
@@ -16,30 +16,39 @@ const emails = () => [
 const PREVIEW_PATTERN = /<div[^>]*data-skip-in-text="true">([^<]*)</;
 
 describe("authentication emails", () => {
-	it("names this product in the subject preview of every email", async () => {
+	it.each([
+		["reset password", () => ResetPasswordEmail({ url: "https://example.com/reset" })],
+		["verify email", () => VerifyEmail({ url: "https://example.com/verify" })],
+		[
+			"change email",
+			() =>
+				VerifyEmailChange({
+					url: "https://example.com/change",
+					previousEmail: "dana@example.com",
+					newEmail: "dana.reyes@example.com",
+				}),
+		],
+	])("names this product, never the upstream project, on the %s email", async (_label, build) => {
+		const html = await render(build());
+
+		expect(html).toContain(APP_PRODUCT_NAME);
+		expect(html).not.toContain(UPSTREAM_PRODUCT_NAME);
+	});
+
+	it("names this product in the subject preview, the logo alt and the signature", async () => {
 		for (const email of emails()) {
 			const html = await render(email);
-			const preview = html.match(PREVIEW_PATTERN)?.[1] ?? "";
 
-			expect(preview).toContain(DESKTOP_PRODUCT_NAME);
-			expect(preview).not.toContain(UPSTREAM_PRODUCT_NAME);
+			expect(html.match(PREVIEW_PATTERN)?.[1] ?? "").toContain(APP_PRODUCT_NAME);
+			expect(html).toContain(`alt="${APP_PRODUCT_NAME}"`);
+			expect(html).toContain(`>${APP_PRODUCT_NAME}</p>`);
 		}
 	});
 
-	it("names this product on the logo and the footer signature", async () => {
-		for (const email of emails()) {
-			const html = await render(email);
-
-			expect(html).toContain(`alt="${DESKTOP_PRODUCT_NAME}"`);
-			expect(html).toContain(`>${DESKTOP_PRODUCT_NAME}</p>`);
-		}
-	});
-
-	it("still credits the upstream project it is built on", async () => {
+	it("still credits the upstream project's author", async () => {
 		const html = await render(VerifyEmail({ url: "https://example.com/verify" }));
 
-		expect(html).toContain(`Built on`);
-		expect(html).toContain(`>${UPSTREAM_PRODUCT_NAME}</a>`);
+		expect(html).toContain("A passion project by");
 		expect(html).toContain("Amruth Pillai");
 	});
 });

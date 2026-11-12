@@ -21,7 +21,7 @@ import { Icon } from "@reactive-resume/ui/components/icon";
 import { Input } from "@reactive-resume/ui/components/input";
 import { OTPField } from "@reactive-resume/ui/components/otp-field";
 import { toast } from "@reactive-resume/ui/components/toast";
-import { DESKTOP_PRODUCT_NAME } from "@reactive-resume/utils/product";
+import { APP_PRODUCT_NAME } from "@reactive-resume/utils/product";
 import { useDialogStore } from "../store";
 import { PasswordInput } from "@/components/input/password-input";
 import { downloadFile } from "@/features/resume/export/save-file";
@@ -67,7 +67,7 @@ export function EnableTwoFactorDialog(_: DialogProps<"auth.two-factor.enable">) 
 
 			const { data, error } = await authClient.twoFactor.enable({
 				password: value.password,
-				issuer: DESKTOP_PRODUCT_NAME,
+				issuer: APP_PRODUCT_NAME,
 			});
 
 			if (error) {

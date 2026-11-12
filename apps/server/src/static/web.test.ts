@@ -173,7 +173,8 @@ describe("web app fallback classification", () => {
 
 			expect(html).toContain("<title>Dana Reyes - Fulei Resume</title>");
 			expect(html).toContain('<meta property="og:site_name" content="Fulei Resume">');
-			expect(html).not.toContain("Reactive Resume");
+			expect(html).toContain('<meta property="og:title" content="Dana Reyes — Staff Engineer">');
+			expect(html).toContain('<meta name="twitter:title" content="Dana Reyes — Staff Engineer">');
 		});
 	});
 

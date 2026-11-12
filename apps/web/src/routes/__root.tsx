@@ -20,7 +20,7 @@ import { useEffect } from "react";
 import { Toaster } from "@reactive-resume/ui/components/toast";
 import { TooltipProvider } from "@reactive-resume/ui/components/tooltip";
 import { isRTL } from "@reactive-resume/utils/locale";
-import { DESKTOP_PRODUCT_NAME } from "@reactive-resume/utils/product";
+import { APP_PRODUCT_NAME } from "@reactive-resume/utils/product";
 import { BreakpointIndicator } from "@/components/layout/breakpoint-indicator";
 import { DonationToast } from "@/components/ui/donation-toast";
 import { DialogManager } from "@/dialogs/manager";
@@ -48,7 +48,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 	// canonical link, social cards and structured data. The router only keeps the title and description current.
 	head: () => {
 		const { description } = getHomepageMeta();
-		return { meta: [{ title: DESKTOP_PRODUCT_NAME }, { name: "description", content: description }] };
+		return { meta: [{ title: APP_PRODUCT_NAME }, { name: "description", content: description }] };
 	},
 	beforeLoad: ({ context }) => loadRootContext(context.queryClient),
 });

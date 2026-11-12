@@ -3,7 +3,7 @@ import type { ResumeData } from "@reactive-resume/schema/resume/data";
 import { ORPCError } from "@orpc/client";
 import { createFileRoute, lazyRouteComponent, notFound, redirect } from "@tanstack/react-router";
 import { getResumeSocialMeta } from "@reactive-resume/resume/social-meta";
-import { DESKTOP_PRODUCT_NAME } from "@reactive-resume/utils/product";
+import { APP_PRODUCT_NAME } from "@reactive-resume/utils/product";
 import { orpc } from "@/libs/orpc/client";
 import { createNoindexFollowMeta } from "@/libs/seo";
 
@@ -32,14 +32,14 @@ export const Route = createFileRoute("/$username/$slug")({
 		const resume = loaderData?.resume;
 
 		if (!resume) {
-			return { meta: [{ title: DESKTOP_PRODUCT_NAME }, createNoindexFollowMeta()] };
+			return { meta: [{ title: APP_PRODUCT_NAME }, createNoindexFollowMeta()] };
 		}
 
 		const social = getResumeSocialMeta(resume.data, resume.name || "Resume");
 
 		return {
 			meta: [
-				{ title: `${social.name} - ${DESKTOP_PRODUCT_NAME}` },
+				{ title: `${social.name} - ${APP_PRODUCT_NAME}` },
 				{ name: "description", content: social.description },
 				createNoindexFollowMeta(),
 			],

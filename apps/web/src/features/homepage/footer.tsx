@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { Link } from "@tanstack/react-router";
+import { UPSTREAM_PRODUCT_NAME } from "@reactive-resume/utils/product";
 import { cn } from "@reactive-resume/utils/style";
 import { SCENE } from "./scroll";
 import { labelClass } from "./ui";
@@ -81,7 +82,7 @@ export function LandingFooter() {
 					<img
 						loading="lazy"
 						src="/logo/light.svg"
-						alt="Reactive Resume"
+						alt={UPSTREAM_PRODUCT_NAME}
 						width={140}
 						height={140}
 						className="-ms-[18px] -mt-[22px] -mb-[18px] size-[140px] dark:hidden"
@@ -89,7 +90,7 @@ export function LandingFooter() {
 					<img
 						loading="lazy"
 						src="/logo/dark.svg"
-						alt="Reactive Resume"
+						alt={UPSTREAM_PRODUCT_NAME}
 						width={140}
 						height={140}
 						className="-ms-[18px] -mt-[22px] -mb-[18px] hidden size-[140px] dark:block"

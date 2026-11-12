@@ -27,9 +27,9 @@ Latin script; do not translate or transliterate either.
 
 A **public resume** — the page a person shares at `/<username>/<slug>`, and the site root when it
 shows a root resume — counts as the app's interface, not as an upstream marketing page. The person
-chose to share it from this app, so its title, social card and `og:site_name` carry **Fulei
-Resume**. Only the pages that describe the upstream project itself (the homepage, the ATS checker,
-their structured data) keep **Reactive Resume**.
+chose to share it from this app, so its title and social card carry **Fulei Resume**. Only the
+pages that describe the upstream project itself (the homepage, the ATS checker, their structured
+data) keep **Reactive Resume**.
 
 Also keep LinkedIn, Discord, Figma, Claude Desktop, PDF.js, models.dev, iOS, MIT License,
 and WCAG 2.1 AA unchanged. **Word**, when naming an import or download format, means
