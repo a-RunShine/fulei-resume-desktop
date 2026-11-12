@@ -2,7 +2,8 @@
 
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BRAND_NAME, BrandMark } from "./brand-mark";
+import { APP_PRODUCT_NAME, UPSTREAM_PRODUCT_NAME } from "@reactive-resume/utils/product";
+import { BrandMark } from "./brand-mark";
 
 vi.mock("@reactive-resume/ui/components/brand-icon", () => ({
 	BrandIcon: ({ variant }: { variant?: string }) => <img alt="" data-variant={variant} />,
@@ -14,14 +15,13 @@ describe("BrandMark", () => {
 	it("shows the product name beside the mark", () => {
 		render(<BrandMark />);
 
-		expect(screen.getByText(BRAND_NAME)).toBeInTheDocument();
-		expect(BRAND_NAME).toBe("Fulei Resume");
+		expect(screen.getByText(APP_PRODUCT_NAME)).toBeInTheDocument();
 	});
 
 	it("never renders the upstream product name", () => {
 		const { container } = render(<BrandMark />);
 
-		expect(container.textContent).not.toContain("Reactive Resume");
+		expect(container.textContent).not.toContain(UPSTREAM_PRODUCT_NAME);
 	});
 
 	it("stays out of the tab order because it is no longer a link", () => {

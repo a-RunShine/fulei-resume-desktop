@@ -1,6 +1,7 @@
 import { ORPCError } from "@orpc/client";
 import { createFileRoute, lazyRouteComponent, redirect } from "@tanstack/react-router";
 import { getResumeSocialMeta } from "@reactive-resume/resume/social-meta";
+import { APP_PRODUCT_NAME } from "@reactive-resume/utils/product";
 import { NotFoundScreen } from "@/components/layout/not-found-screen";
 import { Homepage } from "@/features/homepage/page";
 import { orpc } from "@/libs/orpc/client";
@@ -23,12 +24,12 @@ export const Route = createFileRoute("/_home/")({
 		const root = loaderData?.root;
 		if (root && root.status !== "disabled") {
 			if (root.status === "unavailable") {
-				return { meta: [{ title: "Reactive Resume" }, createNoindexFollowMeta()] };
+				return { meta: [{ title: APP_PRODUCT_NAME }, createNoindexFollowMeta()] };
 			}
 			const social = getResumeSocialMeta(root.resume.data, root.resume.name || "Resume");
 			return {
 				meta: [
-					{ title: `${social.name} - Reactive Resume` },
+					{ title: `${social.name} - ${APP_PRODUCT_NAME}` },
 					{ name: "description", content: social.description },
 					createNoindexFollowMeta(),
 				],

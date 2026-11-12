@@ -8,6 +8,7 @@
 		"./file": "./src/file.ts",
 		"./locale": "./src/locale.ts",
 		"./monorepo.node": "./src/monorepo.node.ts",
+		"./product": "./src/product.ts",
 		"./rate-limit": "./src/rate-limit.ts",
 		"./string": "./src/string.ts",
 		"./style": "./src/style.ts",

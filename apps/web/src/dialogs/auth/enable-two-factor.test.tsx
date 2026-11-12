@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { i18n } from "@lingui/core";
 import { I18nProvider } from "@lingui/react";
 import { Dialog } from "@reactive-resume/ui/components/dialog";
+import { APP_PRODUCT_NAME } from "@reactive-resume/utils/product";
 
 const mocks = vi.hoisted(() => ({ enable: vi.fn(), verify: vi.fn(), close: vi.fn() }));
 vi.mock("@/libs/auth/client", () => ({
@@ -43,6 +44,7 @@ it("shows recoverable backup codes before the TOTP verification that activates t
 	await waitFor(() => expect(screen.getByText("82cNK-qaOiN")).toBeDefined());
 	expect(mocks.verify).not.toHaveBeenCalled();
 	expect(mocks.close).not.toHaveBeenCalled();
+	expect(mocks.enable).toHaveBeenCalledWith(expect.objectContaining({ issuer: APP_PRODUCT_NAME }));
 	fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 	await waitFor(() => expect(screen.getByText(/6 digit code/)).toBeDefined());
 	expect(mocks.verify).not.toHaveBeenCalled();

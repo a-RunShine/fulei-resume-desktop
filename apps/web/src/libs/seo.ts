@@ -1,4 +1,5 @@
 import { t } from "@lingui/core/macro";
+import { UPSTREAM_PRODUCT_NAME } from "@reactive-resume/utils/product";
 
 /**
  * The server writes every page's canonical link, hreflang alternates, social cards and site-wide structured data into
@@ -6,7 +7,7 @@ import { t } from "@lingui/core/macro";
  * what changes as the visitor navigates: the title, the description and, where needed, `noindex`.
  */
 
-const appName = "Reactive Resume";
+const appName = UPSTREAM_PRODUCT_NAME;
 
 export const createNoindexFollowMeta = () => ({ name: "robots", content: "noindex, follow" });
 

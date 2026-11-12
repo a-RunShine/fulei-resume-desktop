@@ -121,6 +121,7 @@ describe("web app fallback classification", () => {
 			expect(html).toContain('<link rel="canonical" href="https://rxresu.me/ats-checker?locale=de-DE">');
 			expect(html).toContain('<meta property="og:title" content="ATS-Prüfung &amp; mehr">');
 			expect(html).toContain('<meta property="og:locale" content="de_DE">');
+			expect(html).toContain('<meta property="og:site_name" content="Reactive Resume">');
 		});
 	});
 
@@ -155,8 +156,25 @@ describe("web app fallback classification", () => {
 
 			const html = await (await handleWebApp(new Request("https://example.com/jane/resume"))).text();
 
-			expect(html).toContain("<title>Jane $&amp; $&#39; Doe - Reactive Resume</title>");
+			expect(html).toContain("<title>Jane $&amp; $&#39; Doe - Fulei Resume</title>");
 			expect(html).toContain('<meta name="description" content="Costs $$ and $` nothing">');
+		});
+
+		it("names the product, not the upstream project, on a shared resume", async () => {
+			vi.mocked(fs.readFile).mockResolvedValue(shell);
+			mocks.getPublicResumeSocialMeta.mockResolvedValue({
+				name: "Dana Reyes",
+				title: "Dana Reyes — Staff Engineer",
+				description: "Ten years of shipping.",
+				template: "azurill",
+			});
+
+			const html = await (await handleWebApp(new Request("https://example.com/dana/dana-reyes"))).text();
+
+			expect(html).toContain("<title>Dana Reyes - Fulei Resume</title>");
+			expect(html).toContain('<meta property="og:site_name" content="Fulei Resume">');
+			expect(html).toContain('<meta property="og:title" content="Dana Reyes — Staff Engineer">');
+			expect(html).toContain('<meta name="twitter:title" content="Dana Reyes — Staff Engineer">');
 		});
 	});
 
@@ -197,6 +215,7 @@ describe("configured root shell", () => {
 		).text();
 		expect(html).toContain('<link rel="canonical" href="https://rxresu.me/" data-root-resume-shell>');
 		expect(html).toContain('<meta name="robots" content="noindex, follow" data-root-resume-shell>');
+		expect(html).toContain("<title>Fulei Resume</title>");
 		expect(html).not.toMatch(/private-or-missing-id|attacker|evil|Marketing|application\/ld\+json|timelapse/);
 	});
 });
