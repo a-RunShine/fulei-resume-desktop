@@ -121,6 +121,7 @@ describe("web app fallback classification", () => {
 			expect(html).toContain('<link rel="canonical" href="https://rxresu.me/ats-checker?locale=de-DE">');
 			expect(html).toContain('<meta property="og:title" content="ATS-Prüfung &amp; mehr">');
 			expect(html).toContain('<meta property="og:locale" content="de_DE">');
+			expect(html).toContain('<meta property="og:site_name" content="Reactive Resume">');
 		});
 	});
 
@@ -213,6 +214,7 @@ describe("configured root shell", () => {
 		).text();
 		expect(html).toContain('<link rel="canonical" href="https://rxresu.me/" data-root-resume-shell>');
 		expect(html).toContain('<meta name="robots" content="noindex, follow" data-root-resume-shell>');
+		expect(html).toContain("<title>Fulei Resume</title>");
 		expect(html).not.toMatch(/private-or-missing-id|attacker|evil|Marketing|application\/ld\+json|timelapse/);
 	});
 });

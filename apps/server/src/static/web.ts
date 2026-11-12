@@ -374,7 +374,7 @@ export async function handleWebApp(request: Request, readFile: ReadWebFile = (pa
 		// Root configuration never discloses a target in the HTML shell. The public API
 		// gates data and browser metadata; shell requests must not count extra views.
 		const shell = html
-			.replace(/<title>[^<]*<\/title>/, () => `<title>${UPSTREAM_PRODUCT_NAME}</title>`)
+			.replace(/<title>[^<]*<\/title>/, () => `<title>${DESKTOP_PRODUCT_NAME}</title>`)
 			.replace(/<meta\s+name="description"[^>]*>/, '<meta name="description" content="">');
 		const markup = `<link rel="canonical" href="${escapeAttribute(canonicalUrl)}" data-root-resume-shell><meta name="robots" content="noindex, follow" data-root-resume-shell>`;
 		return new Response(

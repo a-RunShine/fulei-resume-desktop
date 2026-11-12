@@ -52,12 +52,12 @@ describe("route titles", () => {
 		expect(titleOf(publicResumeRoute)).toBe("Fulei Resume");
 	});
 
-	it("keeps the upstream name on the root resume's unavailable state", () => {
-		expect(titleOf(homeRoute, { root: { status: "unavailable" } })).toBe("Reactive Resume");
+	it("falls back to the product name alone when the root resume is unavailable", () => {
+		expect(titleOf(homeRoute, { root: { status: "unavailable" } })).toBe("Fulei Resume");
 	});
 
-	it("keeps the upstream name on a public root resume", () => {
+	it("names the product, not the upstream project, on a public root resume", () => {
 		const loaderData = { root: { status: "public", username: "dana", slug: "dana-reyes", resume: sharedResume } };
-		expect(titleOf(homeRoute, loaderData)).toBe("Dana Reyes - Reactive Resume");
+		expect(titleOf(homeRoute, loaderData)).toBe("Dana Reyes - Fulei Resume");
 	});
 });
