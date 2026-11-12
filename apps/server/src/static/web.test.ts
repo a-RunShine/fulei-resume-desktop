@@ -155,8 +155,24 @@ describe("web app fallback classification", () => {
 
 			const html = await (await handleWebApp(new Request("https://example.com/jane/resume"))).text();
 
-			expect(html).toContain("<title>Jane $&amp; $&#39; Doe - Reactive Resume</title>");
+			expect(html).toContain("<title>Jane $&amp; $&#39; Doe - Fulei Resume</title>");
 			expect(html).toContain('<meta name="description" content="Costs $$ and $` nothing">');
+		});
+
+		it("names the product, not the upstream project, on a shared resume", async () => {
+			vi.mocked(fs.readFile).mockResolvedValue(shell);
+			mocks.getPublicResumeSocialMeta.mockResolvedValue({
+				name: "Dana Reyes",
+				title: "Dana Reyes — Staff Engineer",
+				description: "Ten years of shipping.",
+				template: "azurill",
+			});
+
+			const html = await (await handleWebApp(new Request("https://example.com/dana/dana-reyes"))).text();
+
+			expect(html).toContain("<title>Dana Reyes - Fulei Resume</title>");
+			expect(html).toContain('<meta property="og:site_name" content="Fulei Resume">');
+			expect(html).not.toContain("Reactive Resume");
 		});
 	});
 

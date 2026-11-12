@@ -48,8 +48,8 @@ describe("route titles", () => {
 		expect(titleOf(publicResumeRoute, { resume: sharedResume })).toBe("Dana Reyes - Fulei Resume");
 	});
 
-	it("keeps the upstream name on the shared resume's not-loaded branch", () => {
-		expect(titleOf(publicResumeRoute)).toBe("Reactive Resume - Reactive Resume");
+	it("falls back to the product name alone when the shared resume did not load", () => {
+		expect(titleOf(publicResumeRoute)).toBe("Fulei Resume");
 	});
 
 	it("keeps the upstream name on the root resume's unavailable state", () => {
