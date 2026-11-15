@@ -63,6 +63,8 @@ export type Locale = z.infer<typeof localeSchema>;
 
 export const defaultLocale: Locale = "en-US";
 
+export const desktopDefaultLocale: Locale = "zh-CN";
+
 export function isLocale(value: unknown): value is Locale {
 	return localeSchema.safeParse(value).success;
 }

@@ -3,7 +3,8 @@ import type { Locale } from "@reactive-resume/utils/locale";
 import { i18n } from "@lingui/core";
 import { msg } from "@lingui/core/macro";
 import Cookies from "js-cookie";
-import { defaultLocale, isLocale } from "@reactive-resume/utils/locale";
+import { defaultLocale, desktopDefaultLocale, isLocale } from "@reactive-resume/utils/locale";
+import { detectionRuntime, type Runtime } from "./desktop-runtime";
 
 const storageKey = "locale";
 const preferenceCookie = { expires: 365, path: "/", sameSite: "lax" as const };
@@ -104,17 +105,35 @@ export function formatRelativeTime(value: Date | string, locale: string) {
 		: formatter.format(0, "second");
 }
 
-export const getLocale = () => {
+export const defaultLocaleFor = (runtime: Runtime): Locale =>
+	runtime === "desktop" ? desktopDefaultLocale : defaultLocale;
+
+type LocaleCookie = {
+	get: (name: string) => string | undefined;
+	set: (name: string, value: string) => void;
+};
+
+type LocaleSources = {
+	scope?: Runtime;
+	cookie?: LocaleCookie;
+	search?: string;
+};
+
+export const getLocale = (sources: LocaleSources = {}): Locale => {
+	const runtime = sources.scope ?? detectionRuntime(globalThis);
+	const cookie = sources.cookie ?? Cookies;
+
 	// A `?locale=` address (the homepage's hreflang alternates) picks the language and keeps it, like the switcher.
-	const requested = new URLSearchParams(window.location.search).get(storageKey);
+	const requested = new URLSearchParams(sources.search ?? globalThis.location?.search ?? "").get(storageKey);
 	if (isLocale(requested)) {
-		Cookies.set(storageKey, requested, preferenceCookie);
+		cookie.set(storageKey, requested, preferenceCookie);
 		return requested;
 	}
 
-	const locale = Cookies.get(storageKey);
-	if (!locale || !isLocale(locale)) return defaultLocale;
-	return locale;
+	const saved = cookie.get(storageKey);
+	if (isLocale(saved)) return saved;
+
+	return defaultLocaleFor(runtime);
 };
 
 const loadMessages = async (locale: Locale) => {
