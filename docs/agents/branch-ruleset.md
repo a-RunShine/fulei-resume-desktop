@@ -21,4 +21,5 @@ The ruleset's `pull_request` rule carries `require_extra_approval_for_unattribut
 ## Related
 
 - Merging is the human's call: see the pull-request section of `AGENTS.md`.
-- Ruleset ID `25059856`, target `~DEFAULT_BRANCH`, holds `deletion` + `non_fast_forward` + `pull_request`. The two structural rules stay on regardless of the approval count.
+- Two active rulesets cover `refs/heads/main` as of 2026-11-15: `main-1` (`deletion` + `non_fast_forward` + `pull_request`, no bypass actors) and `main-2` (`pull_request`, bypassed for repository role `actor_id: 5`). Read them with `gh api repos/<owner>/<repo>/rules/branches/main` rather than trusting a remembered ID — rulesets get recreated, and the earlier `25059856` no longer exists.
+- A merge can produce a **single-parent** commit: GitHub recorded `mergedAt` and `mergedBy` for PR #61 while the resulting commit `6dc42a799` has only one parent. `git log --merges` therefore under-reports what landed through a PR, and "every change arrived via a merge commit" is not a safe claim from that command alone. Check `git rev-list --parents -n 1 <sha>` when the distinction matters.
